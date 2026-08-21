@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the orb — debug</title>
+<link rel="stylesheet" href="/src/styles/base.css">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="topbar">
+    <a class="home" href="/">&larr; experiments</a>
+    <h1>debug</h1>
+    <div class="stat" id="linkstat">link <b>&hellip;</b></div>
+    <div class="stat">loop <b id="hz">&ndash;</b> Hz</div>
+    <div class="stat">drv <b id="drv">&ndash;</b></div>
+    <div class="stat">imu resets <b id="resets">&ndash;</b></div>
+    <div class="stat">mode <b id="modename">&ndash;</b></div>
+  </div>
+
+<main>
+
+<section>
+  <h2>Orientation <span id="heldtag" style="text-transform:none;letter-spacing:0"></span></h2>
+  <canvas id="orb" height="300"></canvas>
+  <div class="modes" style="margin-top:10px">
+    <button class="alt" id="btnlevel">level here</button>
+    <button class="alt" id="btnlevelclr">clear</button>
+    <span class="hint" style="margin:0;align-self:center">
+      zeroes the on-screen pose to however the orb is sitting now</span>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--x)"></i>X</span>
+    <span><i style="background:var(--y)"></i>Y</span>
+    <span><i style="background:var(--z)"></i>Z</span>
+    <span>drift over 1.3 s: <b id="ndisp">0.0</b>°</span>
+  </div>
+</section>
+
+<section>
+  <h2>Rotation — deg/s</h2>
+  <canvas id="gyro" height="200"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--x)"></i>X</span>
+    <span><i style="background:var(--y)"></i>Y</span>
+    <span><i style="background:var(--z)"></i>Z</span>
+    <span><i style="background:var(--ghost)"></i>deadzone / saturation</span>
+  </div>
+  <div class="nums">
+    <div class="num"><span>x</span><b id="nx">0</b></div>
+    <div class="num"><span>y</span><b id="ny">0</b></div>
+    <div class="num"><span>z</span><b id="nz">0</b></div>
+    <div class="num"><span>mode input</span><b id="nraw">0</b></div>
+  </div>
+</section>
+
+<section>
+  <h2>Haptic output</h2>
+  <div class="meter"><i id="bar"></i></div>
+  <canvas id="hap" height="176"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--hot)"></i>out (motor)</span>
+    <span><i style="background:var(--ghost)"></i>strength (pre-texture)</span>
+  </div>
+  <div class="nums">
+    <div class="num"><span>out</span><b id="nout">0.00</b></div>
+    <div class="num"><span>rtp</span><b id="nrtp">0</b></div>
+    <div class="num"><span>pulse</span><b id="npulse">1.00</b></div>
+    <div class="num"><span>grain</span><b id="ngrain">0.00</b></div>
+  </div>
+</section>
+
+<section>
+  <h2>Quantity — what rotation becomes</h2>
+  <div class="modes" id="quantities"></div>
+  <h2 style="margin-top:15px">Source — which axes it comes from</h2>
+  <div class="modes" id="sources"></div>
+  <h2 style="margin-top:15px" id="axishead">Axis</h2>
+  <div class="modes" id="axes"></div>
+  <div class="modes" style="margin-top:14px">
+    <button class="alt" id="btnref">reset reference</button>
+    <button class="alt" id="btnsweep">motor sweep</button>
+    <button class="alt" id="btnstop">stop motor</button>
+    <button class="alt" id="btnhap">haptics: –</button>
+    <button class="alt" id="btnhold">hold: –</button>
+    <button class="alt" id="btngate">silence when set down: –</button>
+  </div>
+  <div class="nums" id="axisnums" style="margin-top:14px">
+    <div class="num"><span>X → pulse</span><b id="qx">0</b></div>
+    <div class="num"><span>Y → strength</span><b id="qy">0</b></div>
+    <div class="num"><span>Z → grain</span><b id="qz">0</b></div>
+    <div class="num"><span id="rawlabel">active</span><b id="nraw2">0</b></div>
+  </div>
+  <p class="hint" id="modehint"></p>
+  <p class="hint">Hold pins strength to a constant so pulse and grain can be
+     judged on their own, without rotating at the same time.</p>
+</section>
+
+<section>
+  <h2>Tuning</h2>
+  <div id="sliders"></div>
+  <p class="hint">Changes go straight to the orb. They live in RAM — tell me
+     which numbers win and I'll fold them into <code>config.h</code>.</p>
+</section>
+
+</main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

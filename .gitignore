@@ -1,0 +1,61 @@
+# --- Root markdown: keep only README ---
+/*.md
+!/README.md
+
+# --- Node / Vite (app/) ---
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Python (tools/) ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- Arduino / PlatformIO (orb/) ---
+build/
+.pio/
+.pioenvs/
+.piolibdeps/
+*.hex
+*.elf
+*.bin
+*.map
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+secrets.h
+credentials.json
+
+# --- Captured data / logs ---
+*.log
+recordings/
+captures/
+data/*.csv
+data/*.jsonl
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini

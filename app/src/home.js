@@ -56,8 +56,10 @@ if (!entries.length) {
 // anything and find an inert page.
 const linkEl = document.getElementById('link');
 const linkVal = linkEl.querySelector('b');
-orb.onStatus(({ connected }) => {
-  linkVal.textContent = connected ? 'up' : 'down — is bridge.py running?';
-  linkEl.classList.toggle('bad', !connected);
+orb.onStatus(({ connected, device }) => {
+  linkVal.textContent = !connected ? 'down — is bridge.py running?'
+    : !device ? 'no orb — plug it in'
+    : 'up';
+  linkEl.classList.toggle('bad', !connected || !device);
 });
 orb.connect();

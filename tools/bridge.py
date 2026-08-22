@@ -20,6 +20,7 @@ import asyncio
 import functools
 import json
 import queue
+import time
 
 import websockets
 
@@ -46,6 +47,7 @@ class Hub:
         self.config: dict[str, str] = {}
         self.config_dirty = False
         self.pending: list[dict] = []
+        self.device = None      # last device state broadcast to clients
 
     # --- inbound from the orb -------------------------------------------
 
@@ -91,9 +93,25 @@ class Hub:
         for ws in dead:
             self.clients.discard(ws)
 
+    def status(self) -> dict:
+        return {
+            "type": "status",
+            "device": self.transport.connected,
+            "port": self.transport.port,
+        }
+
     async def flush_loop(self) -> None:
         while True:
             await asyncio.sleep(FLUSH_INTERVAL_S)
+
+            # A live socket says nothing about whether the orb is plugged in.
+            # Without this the page reports a healthy link while receiving
+            # nothing, which is indistinguishable from the orb sitting still.
+            if self.device != self.transport.connected:
+                self.device = self.transport.connected
+                if not self.device:
+                    self.columns = []       # a replug restarts the header
+                await self.broadcast(self.status())
             if self.config_dirty:
                 self.config_dirty = False
                 await self.broadcast({"type": "config", "config": self.config})
@@ -117,6 +135,7 @@ class Hub:
 
 async def ws_handler(ws, hub: Hub) -> None:
     hub.clients.add(ws)
+    await ws.send(json.dumps(hub.status()))
     # A browser arriving mid-session needs the current state, not the state at
     # boot -- so ask the orb to re-announce everything.
     hub.transport.send("p")
@@ -138,8 +157,17 @@ async def ws_handler(ws, hub: Hub) -> None:
 
 async def main_async(transport) -> None:
     hub = Hub(transport)
-    transport.send("p")
-    transport.send("c 1")
+
+    # Runs every time a device appears, including after a replug. The orb boots
+    # with CSV streaming off, so without this the port would be open and
+    # silent -- which is exactly what a dead link looks like from the browser.
+    def arm():
+        transport.send("p")
+        transport.send("c 1")
+
+    transport.on_connect(arm)
+    if transport.connected:
+        arm()
 
     print("UI  -> http://localhost:5173   (cd app && npm run dev)", flush=True)
     print(f"ws  -> ws://localhost:{WS_PORT}", flush=True)
@@ -156,7 +184,14 @@ def main() -> None:
 
     transport = SerialTransport(args.port)
     transport.start()
-    print(f"orb on {transport.port}", flush=True)
+    # The reader thread opens the port, so give it a moment before reporting an
+    # absence that is really just a race with startup.
+    for _ in range(20):
+        if transport.connected:
+            break
+        time.sleep(0.05)
+    if not transport.connected:
+        print("no orb found yet — will connect when one is plugged in", flush=True)
 
     try:
         asyncio.run(main_async(transport))

@@ -43,6 +43,23 @@ python3 -m venv tools/.venv && tools/.venv/bin/pip install pyserial matplotlib w
 cd app && npm install
 ```
 
+## When the page stops responding
+
+The topbar reports three states, not two, because a healthy bridge with no orb
+plugged into it is the confusing case:
+
+| shown | meaning |
+|---|---|
+| `link down` | `bridge.py` is not running |
+| `link no orb` | bridge is fine, nothing plugged in (or it was unplugged) |
+| `link up` | frames are flowing |
+
+The bridge **reconnects on its own**: it can be started before the orb is
+plugged in, survives unplugging and reflashing, and re-detects the port — which
+changes between replugs. On every connection it re-sends `c 1`, because the orb
+boots with CSV streaming off; an open-but-silent port is otherwise
+indistinguishable from a dead one.
+
 ## The app
 
 Vanilla JS + Vite + three.js `WebGPURenderer` + TSL. Multi-page rather than a
@@ -65,6 +82,13 @@ app/
 three files. `vite.config.js` finds the page and the index finds the `meta.js` —
 there is no registry to keep in sync.
 
+**Forking one**: copy the folder and pass `inheritFrom: '<other-key>'` to
+`createPanel`. The fork starts from wherever the original was tuned to, then
+keeps its own settings once anything in it is touched — so a fork does not begin
+by re-deciding questions that were already settled. Experiments are copied
+rather than sharing a base module: they are meant to diverge, and sharing would
+mean a change to one silently altering the others.
+
 `stage.js` measures the *container*, never the canvas: `setSize` writes the
 canvas's width/height attributes, which are also its intrinsic size, so a canvas
 laid out from its own content grows on every resize until it is many times the
@@ -81,7 +105,15 @@ interpolator actually has — if it sits at 0 the delay is too low and it is
 clamping to the newest sample instead of interpolating.
 
 Note that the device's own sampling is rock steady at 10 ms; jitter is entirely
-introduced between the serial port and the browser.
+introduced between the serial port and the browser. The serial reader takes
+whatever is buffered rather than waiting for a fixed-size chunk — asking for
+4096 bytes meant waiting ~250 ms for them to accumulate, and everything
+downstream stuttered.
+
+Both **angular velocity and linear acceleration** are interpolated, so an
+experiment can react to being turned, to being carried, or to both. They are
+kept separate deliberately: deg/s and m/s² have no honest conversion, and fusing
+them into one number needs an arbitrary radius to relate them.
 
 **Tuning panel**. `createPanel()` gives an experiment a panel that opens and
 closes on **space**. `panel.slider()` returns a **TSL uniform**, so one value

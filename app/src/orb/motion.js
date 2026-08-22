@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three/webgpu';
-import { sensorQuaternion, angularVelocity } from './frame.js';
+import { sensorQuaternion, angularVelocity, linearAccel } from './frame.js';
 
 // Smooth motion from a bursty link.
 //
@@ -20,6 +20,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
   const times = new Float64Array(CAPACITY);
   const quats = Array.from({ length: CAPACITY }, () => new Quaternion());
   const omegas = Array.from({ length: CAPACITY }, () => new Vector3());
+  const accels = Array.from({ length: CAPACITY }, () => new Vector3());
   let head = 0;
   let count = 0;
 
@@ -42,6 +43,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     times[i] = f.t_ms;
     sensorQuaternion(f, quats[i]);
     angularVelocity(f, omegas[i]);
+    linearAccel(f, accels[i]);
 
     head = (head + 1) % CAPACITY;
     if (count < CAPACITY) count++;
@@ -54,6 +56,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
   const state = {
     quaternion: new Quaternion(),
     omega: new Vector3(),
+    accel: new Vector3(),
     valid: false,
     /** Seconds of real motion currently buffered ahead of the render clock. */
     lead: 0,
@@ -81,6 +84,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
         const i = at(count - 1);
         state.quaternion.copy(quats[i]);
         state.omega.copy(omegas[i]);
+        state.accel.copy(accels[i]);
         state.valid = true;
         return state;
       }
@@ -88,6 +92,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
         const i = at(0);
         state.quaternion.copy(quats[i]);
         state.omega.copy(omegas[i]);
+        state.accel.copy(accels[i]);
         state.valid = true;
         return state;
       }
@@ -103,6 +108,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
 
       state.quaternion.copy(quats[a]).slerp(quats[b], t);
       state.omega.copy(omegas[a]).lerp(omegas[b], t);
+      state.accel.copy(accels[a]).lerp(accels[b], t);
       state.valid = true;
       return state;
     },

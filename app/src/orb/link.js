@@ -18,7 +18,9 @@ export class OrbLink {
   constructor(url = DEFAULT_URL) {
     this.url = url;
     this.ws = null;
-    this.connected = false;
+    this.connected = false;   // websocket to the bridge
+    this.device = false;      // orb actually plugged in
+    this.port = null;
     this.latest = null;
     this.config = {};
 
@@ -45,13 +47,14 @@ export class OrbLink {
 
     this.ws.onopen = () => {
       this.connected = true;
-      this._emit(this._statusCbs, { connected: true });
+      this._emit(this._statusCbs, this.statusOf());
     };
 
     this.ws.onclose = () => {
       this.connected = false;
+      this.device = false;
       this._haptic.owned = false;
-      this._emit(this._statusCbs, { connected: false });
+      this._emit(this._statusCbs, this.statusOf());
       clearTimeout(this._retry);
       this._retry = setTimeout(() => this.connect(), 1200);
     };
@@ -73,6 +76,11 @@ export class OrbLink {
       } else if (msg.type === 'config') {
         this.config = msg.config;
         this._emit(this._configCbs, msg.config);
+      } else if (msg.type === 'status') {
+        this.device = !!msg.device;
+        this.port = msg.port ?? null;
+        if (!this.device) this.latest = null;
+        this._emit(this._statusCbs, this.statusOf());
       }
     };
 
@@ -92,9 +100,13 @@ export class OrbLink {
     if (Object.keys(this.config).length) cb(this.config);
     return () => this._configCbs.delete(cb);
   }
+  statusOf() {
+    return { connected: this.connected, device: this.device, port: this.port };
+  }
+
   onStatus(cb) {
     this._statusCbs.add(cb);
-    cb({ connected: this.connected });
+    cb(this.statusOf());
     return () => this._statusCbs.delete(cb);
   }
 

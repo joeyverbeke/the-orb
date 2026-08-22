@@ -447,10 +447,12 @@ requestAnimationFrame(draw);
 
 link.onFrame(push);
 link.onConfig(applyConfig);
-link.onStatus(({ connected }) => {
+link.onStatus(({ connected, device }) => {
   const el = document.getElementById("linkstat");
   el.querySelector("b").textContent =
-    connected ? "up" : "down \u2014 is bridge.py running?";
-  el.classList.toggle("bad", !connected);
+    !connected ? "down \u2014 is bridge.py running?"
+    : !device ? "no orb \u2014 plug it in"
+    : "up";
+  el.classList.toggle("bad", !connected || !device);
 });
 link.connect();

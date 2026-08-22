@@ -21,6 +21,11 @@ export function sensorVector(x, y, z, target = new Vector3()) {
   return target.set(y, z, x);
 }
 
+/** Linear acceleration in three-space, m/s^2, gravity already removed. */
+export function linearAccel(frame, target = new Vector3()) {
+  return sensorVector(frame.ax, frame.ay, frame.az, target);
+}
+
 /** Angular velocity in three-space, radians/sec. */
 export function angularVelocity(frame, target = new Vector3()) {
   return sensorVector(frame.gx, frame.gy, frame.gz, target);

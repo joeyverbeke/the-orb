@@ -19,8 +19,8 @@ static bool     streaming    = false;
 // for wind and dial. They are what the three axes each contribute in 3-axis.
 // qw/qx/qy/qz are the attitude quaternion, which drives the on-screen orb.
 static const char CSV_HEADER[] =
-  "t_ms,gx,gy,gz,mx,my,mz,qw,qx,qy,qz,raw,strength,pulse,grain,env,out,rtp,"
-  "held,disp,loop_hz";
+  "t_ms,gx,gy,gz,ax,ay,az,mx,my,mz,qw,qx,qy,qz,raw,strength,pulse,grain,env,"
+  "out,rtp,held,disp,loop_hz";
 
 float telemetry_hz() { return hz; }
 bool  telemetry_streaming() { return streaming; }
@@ -88,6 +88,12 @@ void telemetry_frame(const ImuFrame &f, const Drive &d, float out) {
   Serial.print(f.gx, 4);          Serial.print(',');
   Serial.print(f.gy, 4);          Serial.print(',');
   Serial.print(f.gz, 4);          Serial.print(',');
+  // Linear acceleration, gravity already removed: motion through space, as
+  // opposed to rotation. Needed by anything reacting to being moved rather
+  // than turned.
+  Serial.print(f.ax, 3);          Serial.print(',');
+  Serial.print(f.ay, 3);          Serial.print(',');
+  Serial.print(f.az, 3);          Serial.print(',');
   Serial.print(d.axis[0], 2);     Serial.print(',');
   Serial.print(d.axis[1], 2);     Serial.print(',');
   Serial.print(d.axis[2], 2);     Serial.print(',');

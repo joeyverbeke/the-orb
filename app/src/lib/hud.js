@@ -18,9 +18,14 @@ export function mountTopbar({ title, backend }) {
 
   const linkEl = bar.querySelector('[data-link]');
   const linkVal = linkEl.querySelector('b');
-  orb.onStatus(({ connected }) => {
-    linkVal.textContent = connected ? 'up' : 'down — is bridge.py running?';
-    linkEl.classList.toggle('bad', !connected);
+  // Three states, not two: the bridge can be perfectly healthy with no orb
+  // plugged into it, and reporting that as "up" sends you hunting the wrong
+  // problem.
+  orb.onStatus(({ connected, device }) => {
+    linkVal.textContent = !connected ? 'down — is bridge.py running?'
+      : !device ? 'no orb — plug it in'
+      : 'up';
+    linkEl.classList.toggle('bad', !connected || !device);
   });
 
   const fpsEl = bar.querySelector('[data-fps]');

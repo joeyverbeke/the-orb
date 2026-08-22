@@ -13,13 +13,19 @@ import { float, uniform } from 'three/tsl';
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-export function createPanel({ title = 'Tuning', storageKey } = {}) {
+export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) {
   const store = storageKey ? `panel:${storageKey}` : null;
 
-  let saved = {};
-  if (store) {
-    try { saved = JSON.parse(localStorage.getItem(store) || '{}'); } catch { saved = {}; }
-  }
+  const read = (k) => {
+    try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; }
+  };
+
+  // An experiment forked from another starts where that one was left, rather
+  // than at the code defaults -- otherwise every fork begins by re-tuning
+  // settings that were already decided. Only until it has been touched itself;
+  // after that it keeps its own.
+  let saved = store ? read(store) : {};
+  if (inheritFrom && !Object.keys(saved).length) saved = read(`panel:${inheritFrom}`);
 
   const entries = [];     // { key, def, read(), apply(v) }
   const readouts = [];    // { el, fn }

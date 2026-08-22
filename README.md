@@ -95,6 +95,18 @@ laid out from its own content grows on every resize until it is many times the
 window. Wrap the canvas in a positioned `.stage` element, as the existing
 experiment does.
 
+**Point clouds**. WebGPU has no sized point primitive — its `PointList`
+topology draws one pixel, with no size, softness or falloff — and `Points` is
+not exported from `three/webgpu` for that reason. A cloud that needs to glow has
+to be billboarded quads: four vertices per point offset in *view* space, with
+`material.vertexNode` returning clip space directly. See
+[data-body/cloud.js](app/experiments/data-body/cloud.js).
+
+Its lattice is **shuffled at build time**. A Fibonacci lattice walks pole to
+pole, so drawing the first N of it in lattice order gives a polar cap rather
+than a sphere; shuffling makes any prefix an even sample, which is what lets a
+point-count control work by just moving the draw range.
+
 **Smooth motion**. Reading `orb.latest` each render gives a signal that steps
 whenever a batch happens to arrive, which looks like stutter at any frame rate.
 `createMotion()` buffers frames against their *device* timestamps and runs the

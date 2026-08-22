@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the orb — motion response</title>
+<link rel="stylesheet" href="/src/styles/base.css">
+<style>
+  body { display:flex; flex-direction:column; overflow:hidden; height:100vh;
+         background:#05060a; }
+  .stage { position:relative; flex:1; min-height:0; }
+  canvas#view { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .curve {
+    position:absolute; left:18px; bottom:18px; width:290px;
+    background:rgba(10,12,18,.82); border:1px solid var(--line);
+    border-radius:8px; padding:11px 12px 8px;
+  }
+  .curve h3 {
+    margin:0 0 8px; font-size:9px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--dim); font-weight:600;
+  }
+  canvas#graph { width:100%; height:130px; display:block; border-radius:4px; background:#05060a; }
+  .curve .legend { display:flex; gap:14px; font-size:10px; color:var(--dim); margin-top:7px; }
+  .curve .legend i { display:inline-block; width:9px; height:2px; vertical-align:middle; margin-right:5px; }
+  .curve .bar { height:6px; background:#0e1118; border-radius:3px; margin-top:8px; overflow:hidden; }
+  .curve .bar i { display:block; height:100%; width:0; background:var(--hot); }
+  .curve .now { display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-top:5px; }
+  .curve .now b { color:var(--ink); font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="view"></canvas>
+    <div class="curve">
+      <h3>Movement → intensity</h3>
+      <canvas id="graph" height="130"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--y)"></i>intensity</span>
+        <span><i style="background:var(--hot)"></i>motor</span>
+      </div>
+      <div class="bar"><i id="level"></i></div>
+      <div class="now">
+        <span>turn <b id="nTurn">0</b>°/s</span>
+        <span>out <b id="nLevel">0.00</b></span>
+        <span>motor <b id="nHaptic">–</b></span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import { mountTopbar, mountFatal } from '../../src/lib/hud.js';
 import { createPanel } from '../../src/lib/panel.js';
 import { orb } from '../../src/orb/link.js';
 import { createMotion } from '../../src/orb/motion.js';
+import { createResponse } from '../../src/orb/response.js';
 
 // A fork of the viscous body. Everything about the ripples is the same; what
 // differs is the resting surface, which is no longer constant.
@@ -55,33 +56,20 @@ async function main() {
   // --- controls -------------------------------------------------------------
   panel.group('Resting surface');
   const pUndRest = panel.slider('Undulation at rest', {
+    // Was a single 'Undulation depth'; adopt that value if still stored.
+    key: 'und-rest', from: 'undulation-depth',
     value: 0.012, min: 0, max: 0.15, step: 0.001,
     note: 'Depth when the orb is completely still.' });
   const pUndMoving = panel.slider('Undulation when moving', {
+    key: 'und-moving',
     value: 0.085, min: 0, max: 0.2, step: 0.001,
     note: 'Depth at full movement. Below the rest value inverts it: calm when '
         + 'moved, restless when still.' });
-  const pUndSettle = panel.slider('Undulation settle (s)', {
-    value: 0.9, min: 0.05, max: 5, step: 0.05,
-    note: 'How long the surface takes to calm down once you stop.' });
   const pUndDetail = panel.slider('Undulation detail', {
     value: 1.35, min: 0.4, max: 4, step: 0.01,
     note: 'Higher = smaller, busier lumps.' });
   const pUndSpeed = panel.slider('Undulation speed', {
     value: 0.07, min: 0, max: 0.5, step: 0.005 });
-
-  panel.group('What counts as movement');
-  const pTurnInf = panel.slider('Turning', {
-    value: 1.0, min: 0, max: 1, step: 0.01,
-    note: 'How much rotation contributes. Zero to react only to being carried.' });
-  const pTurnScale = panel.slider('Turn for full depth (deg/s)', {
-    value: 150, min: 20, max: 500, step: 5 });
-  const pShakeInf = panel.slider('Carrying', {
-    value: 1.0, min: 0, max: 1, step: 0.01,
-    note: 'How much moving it through space contributes, ignoring rotation.' });
-  const pShakeScale = panel.slider('Movement for full depth (m/s²)', {
-    value: 3.0, min: 0.3, max: 15, step: 0.1,
-    note: 'An unhurried lift peaks near 0.5; a brisk one near 1.7.' });
 
   panel.group('Ripples');
   const pRipples = panel.toggle('Ripples', true, {
@@ -147,12 +135,12 @@ async function main() {
   panel.group('Haptics');
   const pHaptics = panel.toggle('Drive the motor', true, {
     note: 'Off hands the motor back to the orb’s own modes.' });
-  const pHapAmount = panel.slider('Haptic strength', { value: 0.9, min: 0, max: 1, step: 0.01 });
 
   panel.group('Live');
   panel.readout('turn speed (deg/s)', () => liveTurn.toFixed(0));
   panel.readout('ripple', () => ripple.toFixed(2));
   panel.readout('movement', () => stirred.toFixed(2));
+  // Informational only: nothing reacts to carrying any more.
   panel.readout('carry (m/s²)', () => liveCarry.toFixed(2));
   panel.readout('fps', () => stage.fps.toFixed(0));
   panel.readout('buffered (ms)', () => (motion.state.lead * 1000).toFixed(0));
@@ -284,6 +272,7 @@ async function main() {
   // Frames arrive in clumps; this replays them against their device timestamps
   // so every rendered frame lands between two real samples.
   const motion = createMotion(orb, { delayMs: pDelay.value });
+  const response = createResponse();
 
   const smoothed = new THREE.Quaternion();
   const axis = new THREE.Vector3(0, 1, 0);
@@ -342,16 +331,9 @@ async function main() {
       // room with almost no rotation, and turned on the spot with almost no
       // translation, and either should stir it.
       liveCarry = m.accel.length();
-      const turnPart = Math.min(liveTurn / Math.max(pTurnScale.value, 1), 1);
-      const carryPart = Math.min(liveCarry / Math.max(pShakeScale.value, 0.05), 1);
-      const target = Math.min(
-        turnPart * pTurnInf.value + carryPart * pShakeInf.value, 1);
-
-      // Rises immediately, settles slowly: being moved should show at once,
-      // and the surface should take a moment to believe you have stopped.
-      stirred = target > stirred
-        ? target
-        : stirred + (target - stirred) * (1 - Math.exp(-dt / Math.max(pUndSettle.value, 0.05)));
+      // Deadzone, full scale, curve and settling all live in the Motion
+      // tool now, so every experiment answers to movement the same way.
+      stirred = response.update(liveTurn, dt);
 
       // Fills fast, drains slowly. This is the viscosity.
       ripple = Math.max(ripple * Math.exp(-dt / Math.max(pRipSettle.value, 0.05)), norm);
@@ -376,8 +358,13 @@ async function main() {
     // The hand feels the slosh, not the motion: it keeps going after you stop
     // and settles as the ripples drain.
     if (pHaptics.value) {
-      const felt = pRipples.value ? ripple : spin;
-      orb.setHaptic(Math.min(1, (felt * 0.9 + spin * 0.15) * pHapAmount.value));
+      // Linked, the motor follows the same curve as everything else,
+      // tuned once in the Motion tool. Unlinked, this experiment gets
+      // to have its own character -- here, the slosh rather than the
+      // gesture that caused it.
+      const linked = response.haptic;
+      const own = Math.min(1, (pRipples.value ? ripple : spin) * 0.9 + spin * 0.15);
+      orb.setHaptic(linked === null ? own : linked);
       hadHaptics = true;
     } else if (hadHaptics) {
       orb.releaseHaptic();

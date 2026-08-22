@@ -127,13 +127,56 @@ experiment can react to being turned, to being carried, or to both. They are
 kept separate deliberately: deg/s and m/s² have no honest conversion, and fusing
 them into one number needs an arbitrary radius to relate them.
 
+**Motion response is global.** `createResponse()` turns turn rate into a 0..1
+intensity, and every experiment uses it rather than rolling its own — that is a
+property of the orb and the hand holding it, not of any one visual. It is tuned
+in the **Motion response** tool and stored once, under `panel:orb-motion`.
+
+**Turning only.** Linear acceleration is still measured and interpolated, and an
+experiment can read `motion.state.accel` directly, but nothing reacts to being
+carried any more.
+
+**Haptics come from the same curve.** With *Link to turning* on, the motor level
+is the same shaped intensity the visuals use, scaled by *Strength at full turn*
+— so a small turn is felt as little as it is seen. Off, each experiment falls
+back to its own mapping (the data and stirred bodies use the ripple slosh, which
+lingers after the gesture that caused it).
+
+Its most important control is the **curve**. A linear mapping gives a small
+knock a proportionate share of the range; an exponent above 1 keeps the bottom
+quiet and saves the range for movement that was meant. At the default 1.8, the
+gap between a 20 deg/s nudge and a 110 deg/s gesture widens from 7× to 37×.
+
+The tool passes its own panel controls into `createResponse()` so the curve
+reacts as sliders drag; experiments pass nothing and read the stored values.
+Same maths either way, so what gets tuned is exactly what ships.
+
 **Tuning panel**. `createPanel()` gives an experiment a panel that opens and
 closes on **space**. `panel.slider()` returns a **TSL uniform**, so one value
 feeds a shader *and* reads as `.value` from CPU code — there is no per-frame
 plumbing to keep in sync and no way for the panel and the shader to disagree.
 Values persist per experiment in `localStorage`, because tuning happens across
-reloads; **copy settings** puts them on the clipboard to paste back into source
-once a setting has won, and **reset** restores the defaults in the code.
+reloads. **copy settings** / **paste settings** move a whole tuning in and out
+as JSON — for pasting into source once a setting has won, for moving between
+machines, and as the only route back from a session that went wrong. **reset**
+is two-step, because one stray click should not be able to discard an evening's
+tuning.
+
+**Renaming a control loses its tuning unless you say otherwise.** A control's
+storage key defaults to a slug of its *label*, so re-wording a label orphans the
+saved value and the control silently reverts to the code default. Two things
+guard against it:
+
+- Pass an explicit **`key`** so a control's identity does not depend on what it
+  is called, and **`from: '<old-key>'`** to adopt a value it used to be stored
+  under. Any control whose label might change should have a `key`.
+- Saving **merges into** what is already stored rather than replacing it, so a
+  value belonging to a control that is not currently mounted is preserved rather
+  than dropped on the next save — which is what makes `from` able to recover it
+  later.
+
+Storage is per-origin: `localhost:5173` and `127.0.0.1:5173` keep separate
+tunings, so stick to one of them.
 
 Anything that shapes how something *feels* belongs on the panel rather than in a
 constant — none of it is decidable except by turning the orb in your hand.
@@ -151,11 +194,12 @@ Without the device-side timeout, closing a tab mid-drive leaves the orb pinned
 at whatever it was last told, with its own modes bypassed. A hold set by hand
 with `H` is deliberately sticky and is never timed out.
 
-**One writer at a time.** Two pages driving haptics both write, last one wins,
-and the result is neither. Keep a single experiment open — a stray tab left on
-another experiment will quietly fight the one you are looking at. `ORB_DEBUG=1
-tools/.venv/bin/python tools/bridge.py` logs every command written to the
-device, which is how to spot it.
+**Only the visible page drives the motor.** Several experiment tabs left open
+otherwise all write the motor at once and the last to speak wins, which reads as
+the haptics being broken rather than as a tab fighting you from behind another
+window. A page that goes hidden releases its hold. Two windows visible side by
+side will still contend; `ORB_DEBUG=1 tools/.venv/bin/python tools/bridge.py`
+logs every command written to the device, which is how to spot it.
 
 
 ---

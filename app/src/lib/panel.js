@@ -7,9 +7,16 @@ import { float, uniform } from 'three/tsl';
 // shader *and* read from CPU code as `.value` -- no per-frame plumbing to keep
 // in sync, and no chance of the panel and the shader disagreeing.
 //
-// Values persist per experiment, because tuning happens across reloads. "Copy"
-// puts them on the clipboard in a form that can be pasted back into the source
-// once a setting has won.
+// Persistence rules, learned the hard way:
+//
+//   * A control's storage key defaults to a slug of its label, so **renaming a
+//     label loses the tuning**. Pass an explicit `key` to make a control's
+//     identity independent of what it is called, and `from` to adopt the value
+//     of a key it used to have.
+//   * Saving merges into whatever is already stored rather than replacing it,
+//     so values belonging to controls that are not mounted right now -- renamed,
+//     removed while experimenting, or living on a different branch of the code
+//     -- survive instead of being quietly dropped.
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -46,10 +53,27 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
 
   const persist = () => {
     if (!store) return;
-    const out = {};
+    // Merge, never replace: see the note at the top of this file.
+    const out = read(store);
     for (const e of entries) out[e.key] = e.read();
-    localStorage.setItem(store, JSON.stringify(out));
+    try {
+      localStorage.setItem(store, JSON.stringify(out));
+    } catch (err) {
+      console.warn('tuning could not be saved', err);
+    }
   };
+
+  // Value to start a control at: its own key, then any key it was renamed
+  // from, then the code default.
+  const startValue = (key, from, def, ok) => {
+    if (ok(saved[key])) return saved[key];
+    if (from && ok(saved[from])) return saved[from];
+    return def;
+  };
+
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const isBool = (v) => typeof v === 'boolean';
+  const isStr = (v) => typeof v === 'string';
 
   const api = {
     group(name) {
@@ -60,9 +84,9 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
     },
 
     /** Returns a TSL uniform. Read or write `.value` from anywhere. */
-    slider(label, { value, min, max, step = 0.001, note } = {}) {
-      const key = slug(label);
-      const start = typeof saved[key] === 'number' ? saved[key] : value;
+    slider(label, { value, min, max, step = 0.001, note, key, from } = {}) {
+      const id = key ?? slug(label);
+      const start = startValue(id, from, value, isNum);
       const node = uniform(float(start));
 
       const el = document.createElement('div');
@@ -90,7 +114,7 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
 
       body.appendChild(el);
       entries.push({
-        key, def: value,
+        key: id, def: value,
         read: () => node.value,
         apply: (v) => { node.value = v; input.value = v; show(v); },
       });
@@ -98,9 +122,9 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
     },
 
     /** Returns a plain holder with a boolean `.value`. */
-    toggle(label, value = false, { note } = {}) {
-      const key = slug(label);
-      const start = typeof saved[key] === 'boolean' ? saved[key] : value;
+    toggle(label, value = false, { note, key, from } = {}) {
+      const id = key ?? slug(label);
+      const start = startValue(id, from, value, isBool);
       const node = { value: start };
 
       const el = document.createElement('div');
@@ -119,7 +143,7 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
 
       body.appendChild(el);
       entries.push({
-        key, def: value,
+        key: id, def: value,
         read: () => node.value,
         apply: (v) => { node.value = v; paint(); },
       });
@@ -131,9 +155,9 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
      * and three converts to the working space, so what is picked is what is
      * seen.
      */
-    color(label, hex, { note } = {}) {
-      const key = slug(label);
-      const start = typeof saved[key] === 'string' ? saved[key] : hex;
+    color(label, hex, { note, key, from } = {}) {
+      const id = key ?? slug(label);
+      const start = startValue(id, from, hex, isStr);
       const node = uniform(new Color(start));
 
       const el = document.createElement('div');
@@ -153,7 +177,7 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
 
       body.appendChild(el);
       entries.push({
-        key, def: hex,
+        key: id, def: hex,
         read: () => input.value,
         apply: (v) => { input.value = v; node.value.set(v); },
       });
@@ -176,12 +200,16 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
       row.className = 'row2';
       row.style.marginTop = '18px';
 
+      const snapshot = () => {
+        const out = {};
+        for (const e of entries) out[e.key] = e.read();
+        return JSON.stringify(out, null, 2);
+      };
+
       const copy = document.createElement('button');
       copy.textContent = 'copy settings';
       copy.addEventListener('click', async () => {
-        const out = {};
-        for (const e of entries) out[e.key] = e.read();
-        const text = JSON.stringify(out, null, 2);
+        const text = snapshot();
         try {
           await navigator.clipboard.writeText(text);
           copy.textContent = 'copied';
@@ -192,14 +220,50 @@ export function createPanel({ title = 'Tuning', storageKey, inheritFrom } = {}) 
         setTimeout(() => { copy.textContent = 'copy settings'; }, 1400);
       });
 
+      // The other half of copy: a way back from a saved blob. Without this,
+      // "copy settings" is a one-way door and there is no route to undo a bad
+      // session or move a tuning between machines.
+      const paste = document.createElement('button');
+      paste.textContent = 'paste settings';
+      paste.addEventListener('click', () => {
+        const text = prompt('Paste settings JSON:');
+        if (!text) return;
+        let data;
+        try { data = JSON.parse(text); } catch { alert('That is not valid JSON.'); return; }
+        let applied = 0;
+        for (const e of entries) {
+          if (data[e.key] !== undefined) { e.apply(data[e.key]); applied++; }
+        }
+        persist();
+        paste.textContent = `applied ${applied}`;
+        setTimeout(() => { paste.textContent = 'paste settings'; }, 1600);
+      });
+
+      // Two-step: a stray click here would otherwise wipe a whole tuning
+      // session with no undo.
       const reset = document.createElement('button');
+      let armed = false;
+      let disarm;
       reset.textContent = 'reset';
       reset.addEventListener('click', () => {
+        if (!armed) {
+          armed = true;
+          reset.textContent = 'reset — sure?';
+          reset.classList.add('on');
+          disarm = setTimeout(() => {
+            armed = false; reset.textContent = 'reset'; reset.classList.remove('on');
+          }, 3000);
+          return;
+        }
+        clearTimeout(disarm);
+        armed = false;
+        reset.textContent = 'reset';
+        reset.classList.remove('on');
         for (const e of entries) e.apply(e.def);
         persist();
       });
 
-      row.append(copy, reset);
+      row.append(copy, paste, reset);
       body.appendChild(row);
       return api;
     },

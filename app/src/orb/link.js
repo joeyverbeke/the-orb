@@ -38,6 +38,14 @@ export class OrbLink {
     // hold out by itself after HOLD_TIMEOUT_MS (console.cpp). Keep both, but
     // do not rely on this one.
     addEventListener('pagehide', () => this.releaseHaptic());
+
+    // A page you cannot see must not be driving the thing in your hand.
+    // Several experiment tabs left open otherwise all write the motor at once
+    // and the last one to speak wins, which reads as the haptics being broken
+    // rather than as a tab fighting you from behind another window.
+    addEventListener('visibilitychange', () => {
+      if (document.hidden) this.releaseHaptic();
+    });
   }
 
   connect() {
@@ -124,6 +132,7 @@ export class OrbLink {
   // back.
 
   setHaptic(v) {
+    if (document.hidden) return;      // see the visibilitychange note above
     const clamped = Math.max(0, Math.min(1, v));
     const now = performance.now();
     const changed = Math.abs(clamped - this._haptic.last) > 0.004;

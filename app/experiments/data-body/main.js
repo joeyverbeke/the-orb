@@ -12,6 +12,7 @@ import { mountTopbar, mountFatal } from '../../src/lib/hud.js';
 import { createPanel } from '../../src/lib/panel.js';
 import { orb } from '../../src/orb/link.js';
 import { createMotion } from '../../src/orb/motion.js';
+import { createResponse } from '../../src/orb/response.js';
 import { buildCloud } from './cloud.js';
 
 // The sphere resolved as a cloud rather than a surface.
@@ -69,29 +70,29 @@ async function main() {
 
   panel.group('Resting surface');
   const pUndRest = panel.slider('Undulation at rest', {
+    // Was a single 'Undulation depth'; adopt that value if still stored.
+    key: 'und-rest', from: 'undulation-depth',
     value: 0.02, min: 0, max: 0.3, step: 0.001 });
   const pUndMoving = panel.slider('Undulation when moving', {
+    key: 'und-moving',
     value: 0.16, min: 0, max: 0.6, step: 0.001 });
-  const pUndSettle = panel.slider('Undulation settle (s)', {
-    value: 1.1, min: 0.05, max: 5, step: 0.05 });
   const pUndDetail = panel.slider('Undulation detail', {
     value: 1.5, min: 0.3, max: 5, step: 0.01 });
   const pUndSpeed = panel.slider('Undulation speed', {
     value: 0.09, min: 0, max: 0.5, step: 0.005 });
 
-  panel.group('What counts as movement');
-  const pTurnInf = panel.slider('Turning', { value: 1.0, min: 0, max: 1, step: 0.01 });
-  const pTurnScale = panel.slider('Turn for full depth (deg/s)', {
-    value: 150, min: 20, max: 500, step: 5 });
-  const pShakeInf = panel.slider('Carrying', { value: 1.0, min: 0, max: 1, step: 0.01 });
-  const pShakeScale = panel.slider('Movement for full depth (m/s²)', {
-    value: 3.0, min: 0.3, max: 15, step: 0.1 });
-
   panel.group('Drift');
-  const pFlowAmount = panel.slider('Drift amount', {
-    value: 0.05, min: 0, max: 0.4, step: 0.002,
+  const pFlowRest = panel.slider('Drift at rest', {
+    // Was a single 'Drift amount'; adopt that value if it is still stored.
+    key: 'drift-rest', from: 'drift-amount',
+    value: 0.02, min: 0, max: 0.4, step: 0.002,
     note: 'A slow vector field the points swim through. This is most of what '
         + 'makes it read as a cloud and not a shell of dots.' });
+  const pFlowMoving = panel.slider('Drift when moving', {
+    key: 'drift-moving',
+    value: 0.14, min: 0, max: 0.6, step: 0.002,
+    note: 'Drift at full movement. Follows the same envelope as the '
+        + 'undulation, so the cloud loosens and re-settles as one thing.' });
   const pFlowScale = panel.slider('Drift detail', {
     value: 1.1, min: 0.2, max: 4, step: 0.02 });
   const pFlowSpeed = panel.slider('Drift speed', {
@@ -125,11 +126,11 @@ async function main() {
 
   panel.group('Haptics');
   const pHaptics = panel.toggle('Drive the motor', true);
-  const pHapAmount = panel.slider('Haptic strength', { value: 0.9, min: 0, max: 1, step: 0.01 });
 
   panel.group('Live');
   panel.readout('turn speed (deg/s)', () => liveTurn.toFixed(0));
   panel.readout('movement', () => stirred.toFixed(2));
+  panel.readout('drift', () => uDrift.value.toFixed(3));
   panel.readout('ripple', () => ripple.toFixed(2));
   panel.readout('points', () => (Math.round(pCount.value / 1000) + 'k'));
   panel.readout('fps', () => stage.fps.toFixed(0));
@@ -144,6 +145,7 @@ async function main() {
   const uSpin = uniform(float(0));
   const uDir = uniform(float(1));
   const uUndDepth = uniform(float(0.02));
+  const uDrift = uniform(float(0.02));      // driven the same way
 
   // --- geometry -------------------------------------------------------------
   const geometry = buildCloud(MAX_POINTS);
@@ -175,7 +177,7 @@ async function main() {
   const flowT = time.mul(pFlowSpeed);
   const flow = mx_fractal_noise_vec3(
     dir.mul(pFlowScale).add(vec3(flowT, flowT.mul(0.7), flowT.mul(1.3))), 2, 2.0, 0.5)
-    .mul(pFlowAmount);
+    .mul(uDrift);
 
   const centreLocal = dir.mul(radius).add(flow);
 
@@ -233,6 +235,7 @@ async function main() {
 
   // --- device ---------------------------------------------------------------
   const motion = createMotion(orb, { delayMs: pDelay.value });
+  const response = createResponse();
   const smoothed = new THREE.Quaternion();
   const axis = new THREE.Vector3(0, 1, 0);
   const nextAxis = new THREE.Vector3();
@@ -251,7 +254,7 @@ async function main() {
   }
 
   let phase = 0, ripple = 0, spin = 0, stirred = 0;
-  let liveTurn = 0, liveCarry = 0;
+  let liveTurn = 0;
   let started = false, hadHaptics = false;
 
   stage.onUpdate((dt) => {
@@ -275,15 +278,9 @@ async function main() {
       const norm = Math.min(liveTurn / Math.max(pTurnFull.value, 1), 1);
       spin += (norm - spin) * (1 - Math.exp(-dt * 8));
 
-      liveCarry = m.accel.length();
-      const turnPart = Math.min(liveTurn / Math.max(pTurnScale.value, 1), 1);
-      const carryPart = Math.min(liveCarry / Math.max(pShakeScale.value, 0.05), 1);
-      const target = Math.min(
-        turnPart * pTurnInf.value + carryPart * pShakeInf.value, 1);
-
-      stirred = target > stirred
-        ? target
-        : stirred + (target - stirred) * (1 - Math.exp(-dt / Math.max(pUndSettle.value, 0.05)));
+      // Deadzone, full scale, curve and settling all live in the Motion
+      // tool now, so every experiment answers to movement the same way.
+      stirred = response.update(liveTurn, dt);
 
       ripple = Math.max(ripple * Math.exp(-dt / Math.max(pRipSettle.value, 0.05)), norm);
     }
@@ -301,10 +298,16 @@ async function main() {
     uSpin.value = spin;
     uDir.value = pAgainst.value ? 1 : -1;
     uUndDepth.value = pUndRest.value + (pUndMoving.value - pUndRest.value) * stirred;
+    uDrift.value = pFlowRest.value + (pFlowMoving.value - pFlowRest.value) * stirred;
 
     if (pHaptics.value) {
-      const felt = pRipples.value ? ripple : spin;
-      orb.setHaptic(Math.min(1, (felt * 0.9 + spin * 0.15) * pHapAmount.value));
+      // Linked, the motor follows the same curve as everything else,
+      // tuned once in the Motion tool. Unlinked, this experiment gets
+      // to have its own character -- here, the slosh rather than the
+      // gesture that caused it.
+      const linked = response.haptic;
+      const own = Math.min(1, (pRipples.value ? ripple : spin) * 0.9 + spin * 0.15);
+      orb.setHaptic(linked === null ? own : linked);
       hadHaptics = true;
     } else if (hadHaptics) {
       orb.releaseHaptic();

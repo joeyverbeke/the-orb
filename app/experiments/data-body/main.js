@@ -145,6 +145,10 @@ async function main() {
   const uSpin = uniform(float(0));
   const uDir = uniform(float(1));
   const uUndDepth = uniform(float(0.02));
+  // Object-space directions are looked up through this so that re-levelling
+  // -- which silently redefines the body when the orb is set down -- leaves
+  // the picture untouched. See src/orb/motion.js.
+  const uField = uniform(new THREE.Matrix3());
   const uDrift = uniform(float(0.02));      // driven the same way
 
   // --- geometry -------------------------------------------------------------
@@ -153,18 +157,19 @@ async function main() {
   const corner = attribute('aCorner', 'vec2');
   const seed = attribute('aSeed', 'float');
   const dir = normalize(positionLocal);
+  const fieldDir = normalize(uField.mul(dir));
 
   // Where this point sits, radially, before billboarding.
   const radius = Fn(() => {
     const drift = time.mul(pUndSpeed);
     const field = mx_fractal_noise_float(
-      dir.mul(pUndDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
+      fieldDir.mul(pUndDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
 
     // Scatter either side of the surface, deterministic per point.
     const shell = seed.sub(0.5).mul(pShell);
 
-    const phi = atan(dot(dir, uW), dot(dir, uU));
-    const along = dot(dir, uAxis);
+    const phi = atan(dot(fieldDir, uW), dot(fieldDir, uU));
+    const along = dot(fieldDir, uAxis);
     const belt = pow(clamp(float(1).sub(along.mul(along)), 0, 1), pRipBelt);
     const wave = sin(phi.mul(pRipCount).add(uPhase.mul(uDir)))
       .mul(belt).mul(uRipple).mul(pRipDepth);
@@ -176,7 +181,7 @@ async function main() {
   // than sitting rigidly on a shell.
   const flowT = time.mul(pFlowSpeed);
   const flow = mx_fractal_noise_vec3(
-    dir.mul(pFlowScale).add(vec3(flowT, flowT.mul(0.7), flowT.mul(1.3))), 2, 2.0, 0.5)
+    fieldDir.mul(pFlowScale).add(vec3(flowT, flowT.mul(0.7), flowT.mul(1.3))), 2, 2.0, 0.5)
     .mul(uDrift);
 
   const centreLocal = dir.mul(radius).add(flow);
@@ -255,6 +260,7 @@ async function main() {
 
   let phase = 0, ripple = 0, spin = 0, stirred = 0;
   let liveTurn = 0;
+  let lastEpoch = -1;
   let started = false, hadHaptics = false;
 
   stage.onUpdate((dt) => {
@@ -262,8 +268,16 @@ async function main() {
     const m = motion.sample();
 
     if (m.valid) {
-      if (!started) { smoothed.copy(m.quaternion); started = true; }
-      smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
+      // The field compensation is instantaneous, so easing towards a re-levelled
+      // attitude would drag the body across a picture that has already moved --
+      // that is the stutter. Snap on the frame it changes and nothing shows.
+      if (!started || m.epoch !== lastEpoch) {
+        smoothed.copy(m.quaternion);
+        lastEpoch = m.epoch;
+        started = true;
+      } else {
+        smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
+      }
 
       const omega = m.omega;
       const mag = omega.length();
@@ -290,9 +304,13 @@ async function main() {
     cloud.quaternion.copy(smoothed);
     geometry.setDrawRange(0, Math.floor(pCount.value) * 6);
 
-    uAxis.value.copy(axis);
-    uU.value.copy(basisU);
-    uW.value.copy(basisW);
+    uField.value.copy(m.fieldMatrix);
+    // The spin axis and its basis live in body space, but the field is now
+    // looked up through `field` -- so they have to be carried into the same
+    // space or the ripple bands drift off the axis they belong to.
+    uAxis.value.copy(axis).applyMatrix3(m.fieldMatrix);
+    uU.value.copy(basisU).applyMatrix3(m.fieldMatrix);
+    uW.value.copy(basisW).applyMatrix3(m.fieldMatrix);
     uPhase.value = phase;
     uRipple.value = pRipples.value ? ripple : 0;
     uSpin.value = spin;

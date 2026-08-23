@@ -132,6 +132,20 @@ intensity, and every experiment uses it rather than rolling its own — that is 
 property of the orb and the hand holding it, not of any one visual. It is tuned
 in the **Motion response** tool and stored once, under `panel:orb-motion`.
 
+**It re-levels itself.** People set the orb down in whatever orientation suits
+them, and the sensor's own zero has nothing to do with how it sits in a hand, so
+the pose it is left in becomes the new neutral and attitude is reported relative
+to that. This is why an experiment looks upright when picked up while the raw
+sensor attitude does not.
+
+Re-levelling would normally make the picture jump, since surface features are
+fixed to the body and the body has just been redefined. `motion.state.field`
+counter-rotates by exactly the amount the body moved — look every object-space
+field up through it (`uField.mul(dir)`) and the image is identical across the
+change, which is what makes it safe to do silently. Anything derived in body
+space and used against those lookups, such as a ripple axis, has to be carried
+into the same space or it drifts off.
+
 **Turning only.** Linear acceleration is still measured and interpolated, and an
 experiment can read `motion.state.accel` directly, but nothing reacts to being
 carried any more.

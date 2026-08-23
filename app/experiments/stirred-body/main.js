@@ -158,21 +158,26 @@ async function main() {
   const uRipple = uniform(float(0));   // 0..1, viscous envelope
   const uSpin   = uniform(float(0));   // 0..1, instantaneous
   const uDir    = uniform(float(1));   // +1 trails the turn, -1 leads it
+  // Object-space directions are looked up through this so that re-levelling
+  // -- which silently redefines the body when the orb is set down -- leaves
+  // the picture untouched. See src/orb/motion.js.
+  const uField  = uniform(new THREE.Matrix3());
   const uUndDepth = uniform(float(0.012));  // driven by how much it is moving
 
   // --- surface --------------------------------------------------------------
   // One height field, used for both displacement and normals, so the shading
   // can never disagree with the silhouette.
   const surface = Fn(([p]) => {
-    const n = normalize(p);
+    const pf = uField.mul(p);
+    const n = normalize(pf);
     const drift = time.mul(pUndSpeed);
 
     // Two fractal fields drifting on different headings. A single drifting
     // field just slides; two make it seem to evolve.
     const slow = mx_fractal_noise_float(
-      p.mul(pUndDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
+      pf.mul(pUndDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
     const fine = mx_fractal_noise_float(
-      p.mul(pUndDetail.mul(1.9)).sub(vec3(drift.mul(0.7), 0.0, drift.mul(0.55))), 2, 2.0, 0.5);
+      pf.mul(pUndDetail.mul(1.9)).sub(vec3(drift.mul(0.7), 0.0, drift.mul(0.55))), 2, 2.0, 0.5);
     const idle = slow.add(fine.mul(0.32)).mul(uUndDepth);
 
     // Angle around the spin axis. Because the axis flips when the rotation
@@ -299,6 +304,7 @@ async function main() {
   let liveTurn = 0;
   let liveCarry = 0;
   let stirred = 0;
+  let lastEpoch = -1;
   let started = false;
   let hadHaptics = false;
 
@@ -307,8 +313,16 @@ async function main() {
     const m = motion.sample();
 
     if (m.valid) {
-      if (!started) { smoothed.copy(m.quaternion); started = true; }
-      smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
+      // The field compensation is instantaneous, so easing towards a re-levelled
+      // attitude would drag the body across a picture that has already moved --
+      // that is the stutter. Snap on the frame it changes and nothing shows.
+      if (!started || m.epoch !== lastEpoch) {
+        smoothed.copy(m.quaternion);
+        lastEpoch = m.epoch;
+        started = true;
+      } else {
+        smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
+      }
 
       const omega = m.omega;                     // rad/s, object space
       const mag = omega.length();
@@ -346,9 +360,13 @@ async function main() {
     marker.visible = pMarker.value;
     cage.visible = pCage.value;
 
-    uAxis.value.copy(axis);
-    uU.value.copy(basisU);
-    uW.value.copy(basisW);
+    uField.value.copy(m.fieldMatrix);
+    // The spin axis and its basis live in body space, but the field is now
+    // looked up through `field` -- so they have to be carried into the same
+    // space or the ripple bands drift off the axis they belong to.
+    uAxis.value.copy(axis).applyMatrix3(m.fieldMatrix);
+    uU.value.copy(basisU).applyMatrix3(m.fieldMatrix);
+    uW.value.copy(basisW).applyMatrix3(m.fieldMatrix);
     uUndDepth.value = pUndRest.value + (pUndMoving.value - pUndRest.value) * stirred;
     uPhase.value = phase;
     uRipple.value = pRipples.value ? ripple : 0;

@@ -134,22 +134,27 @@ async function main() {
   const uLevel = uniform(float(0));
   const uUndDepth = uniform(float(L.undRest));
   const uDrift = uniform(float(L.driftRest));
+  // Object-space directions are looked up through this so that re-levelling --
+  // which silently redefines the body when the orb is set down -- leaves the
+  // picture untouched. See src/orb/motion.js.
+  const uField = uniform(new THREE.Matrix3());
 
   const geometry = buildCloud(POINTS);
   const corner = attribute('aCorner', 'vec2');
   const seed = attribute('aSeed', 'float');
   const dir = normalize(positionLocal);
+  const fieldDir = normalize(uField.mul(dir));
 
   const radius = Fn(() => {
     const drift = time.mul(L.undSpeed);
     const field = mx_fractal_noise_float(
-      dir.mul(L.undDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
+      fieldDir.mul(L.undDetail).add(vec3(0.0, drift, drift.mul(0.45))), 3, 2.0, 0.5);
     return float(1).add(seed.sub(0.5).mul(L.shell)).add(field.mul(uUndDepth));
   })();
 
   const flowT = time.mul(L.driftSpeed);
   const flow = mx_fractal_noise_vec3(
-    dir.mul(L.driftDetail).add(vec3(flowT, flowT.mul(0.7), flowT.mul(1.3))), 2, 2.0, 0.5)
+    fieldDir.mul(L.driftDetail).add(vec3(flowT, flowT.mul(0.7), flowT.mul(1.3))), 2, 2.0, 0.5)
     .mul(uDrift);
 
   const centreLocal = dir.mul(radius).add(flow);
@@ -256,13 +261,21 @@ async function main() {
   // --- device ---------------------------------------------------------------
   const motion = createMotion(orb, { delayMs: 70 });
   const smoothed = new THREE.Quaternion();
-  let liveTurn = 0, started = false, lastGraph = 0;
+  let liveTurn = 0, started = false, lastGraph = 0, lastEpoch = -1;
 
   stage.onUpdate((dt) => {
     const m = motion.sample();
     if (m.valid) {
-      if (!started) { smoothed.copy(m.quaternion); started = true; }
-      smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * 22));
+      // The field compensation is instantaneous, so easing towards a re-levelled
+      // attitude would drag the body across a picture that has already moved --
+      // that is the stutter. Snap on the frame it changes and nothing shows.
+      if (!started || m.epoch !== lastEpoch) {
+        smoothed.copy(m.quaternion);
+        lastEpoch = m.epoch;
+        started = true;
+      } else {
+        smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * 22));
+      }
       liveTurn = m.omega.length() * DEG;
     }
 
@@ -273,6 +286,7 @@ async function main() {
     if (felt === null) orb.releaseHaptic(); else orb.setHaptic(felt);
 
     cloud.quaternion.copy(smoothed);
+    uField.value.copy(m.fieldMatrix);
     uLevel.value = level;
     uUndDepth.value = L.undRest + (L.undMoving - L.undRest) * level;
     uDrift.value = L.driftRest + (L.driftMoving - L.driftRest) * level;

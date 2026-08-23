@@ -163,47 +163,88 @@ async function main() {
         + 'funnel head-on. Around 60 leaves it just cresting the top, which is '
         + 'the whole point.' });
   const pGoalSize = panel.slider('Size (deg)', {
-    key: 'goal-size', value: 22, min: 4, max: 60, step: 1 });
+    key: 'goal-size-v3', value: 32, min: 4, max: 60, step: 1 });
   const pGoalDepth = panel.slider('Suck-in depth', {
-    key: 'goal-depth', value: 0.42, min: 0, max: 1, step: 0.01,
-    note: 'How far the points inside it are dragged toward the core.' });
+    key: 'goal-depth-v3', value: 0.85, min: 0, max: 1, step: 0.01,
+    note: 'How far the points inside it are dragged toward the core. This is '
+        + 'the depth at rest; aiming multiplies it by the surge, and the '
+        + 'result is saturated, so it can be run hard without inverting.' });
   const pGoalConverge = panel.slider('Funnel', {
-    key: 'goal-converge', value: 0.35, min: 0, max: 0.9, step: 0.01,
+    key: 'goal-converge-v3', value: 0.6, min: 0, max: 0.9, step: 0.01,
     note: 'Pulls points sideways toward the axis too, so it reads as a throat '
         + 'rather than a dent.' });
+  const pGoalGather = panel.slider('Draws points in from (x size)', {
+    key: 'goal-gather', value: 2.2, min: 1, max: 2.5, step: 0.05,
+    note: 'The funnel reaches well outside the coloured disc and leans the '
+        + 'surrounding points toward the axis too. That is what actually makes '
+        + 'it denser: the points have to come from somewhere, so the throat '
+        + 'thickens and the field around it thins.' });
+  const pGoalDensity = panel.slider('Density compensation', {
+    key: 'goal-density', value: 1.3, min: 0, max: 4, step: 0.05,
+    note: 'Dims each point by how much the funnel crowded it together. 2 is '
+        + 'the physical value -- area goes as the square -- and holds the '
+        + 'throat at exactly the brightness of its surroundings, which is one '
+        + 'notch too honest: it should read as hotter than the field it sits '
+        + 'in. Under 2 leaves some of the pile-up in. 0 is a lamp.' });
   const pGoalEye = panel.slider('Dark eye', {
-    key: 'goal-eye', value: 0.38, min: 0.05, max: 0.95, step: 0.01,
-    note: 'How much of the throat goes black. The funnel piles points toward '
-        + 'the axis and additive blending stacks them, so without this the '
-        + 'centre is the brightest part of it and there is no hole.' });
+    key: 'goal-eye-v2', value: 0.72, min: 0.05, max: 0.99, step: 0.01,
+    note: 'Where the throat goes black. Something has to, or the funnel piles '
+        + 'points onto the axis and additive blending makes the centre the '
+        + 'brightest part of it. But this coordinate climbs fast -- at 0.38 it '
+        + 'erased everything inside 15 of 26 degrees, which is the whole wall '
+        + 'of the funnel. Keep it high: black the pupil, not the throat.' });
   const pGoalArms = panel.slider('Spiral arms', { key: 'goal-arms', value: 3, min: 1, max: 9, step: 1 });
   const pGoalTwist = panel.slider('Spiral twist', { key: 'goal-twist', value: 7, min: 0, max: 24, step: 0.5 });
   const pGoalSpin = panel.slider('Spiral speed', { key: 'goal-spin', value: 1.6, min: 0, max: 8, step: 0.05 });
-  const pGoalGlow = panel.slider('Glow', { key: 'goal-glow', value: 1.9, min: 0, max: 6, step: 0.05 });
+  const pGoalGlow = panel.slider('Glow', {
+    key: 'goal-glow-v3', value: 3.1, min: 0, max: 8, step: 0.05,
+    note: 'Density compensation takes real brightness out of the throat, so '
+        + 'this carries more of it than it used to.' });
   const pGoalLift = panel.slider('Spiral contrast', { key: 'goal-lift', value: 1.1, min: 0, max: 3, step: 0.05 });
   const pGoalPeek = panel.slider('Peek from behind', {
-    key: 'goal-peek', value: 0.1, min: 0, max: 1, step: 0.01,
+    key: 'goal-peek-v2', value: 0.15, min: 0, max: 1, step: 0.01,
     note: 'The cloud is additive and writes no depth, so the far side shows '
         + 'through everything. This is how much of the throat survives that — '
         + 'low enough to be a rumour when it is round the back, and it opens '
         + 'up as it is brought toward you.' });
-  const cGoalBody = panel.color('Becomes — body', '#c8402c', { key: 'goal-body-col' });
-  const cGoalCrest = panel.color('Becomes — crests', '#ffd9b0', { key: 'goal-crest-col' });
-  const cGoalMoving = panel.color('Becomes — when moving', '#ff9a3c', { key: 'goal-moving-col' });
+  // One colour per stage, not three. Body and "when moving" are derived from
+  // it below, so every stage keeps the shape of the one that was tuned by
+  // hand: a body that is almost black and crests that carry all the colour.
+  const cBecomes = panel.color('Becomes', '#d8452c', { key: 'becomes-col' });
+  const pBodyDark = panel.slider('Body darkness', {
+    key: 'body-dark', value: 0.12, min: 0.01, max: 0.6, step: 0.01,
+    note: 'What the stage colour is multiplied down to for the bulk of the '
+        + 'cloud. Low: almost black, carrying just enough of the colour to '
+        + 'read as its shadow.' });
+  const pMovingHue = panel.slider('Moving-colour hue shift', {
+    key: 'moving-hue', value: 0.06, min: -0.5, max: 0.5, step: 0.005 });
+  const pMovingLift = panel.slider('Moving-colour lift', {
+    key: 'moving-lift', value: 0.5, min: 0, max: 1, step: 0.01 });
+  const pRestLift = panel.slider('Set-down lift', {
+    key: 'rest-lift', value: 0.5, min: 0, max: 1, step: 0.01,
+    note: 'A body that is almost black is invisible at rest -- there is barely '
+        + 'any crest to carry the colour until something moves. Set down, the '
+        + 'derived stages lift this far toward their crest colour so the orb '
+        + 'is there to look at again. The first stage is never touched: it is '
+        + 'what was tuned by hand, and it already works at rest.' });
   const pHueStep = panel.slider('Hue step per stage', {
     key: 'hue-step', value: 0.17, min: 0, max: 0.5, step: 0.005,
-    note: 'The first transition lands on the three colours above. After that '
-        + 'each new stage is the last one rotated by this.' });
+    note: 'The first transition lands on the colour above. After that each new '
+        + 'stage is the last one rotated by this.' });
 
   panel.group('Transition');
   const pAimAngle = panel.slider('Counts as centred (deg)', {
-    key: 'aim-angle', value: 15, min: 3, max: 45, step: 1 });
+    key: 'aim-angle-v2', value: 20, min: 3, max: 45, step: 1 });
   const pAimWide = panel.slider('Starts reacting (deg)', {
     key: 'aim-wide', value: 55, min: 15, max: 120, step: 1,
     note: 'The point brightens and deepens as it comes inside this, so closing '
         + 'in has feedback before it fires.' });
   const pAimSurge = panel.slider('Surge when near', {
     key: 'aim-surge', value: 1.2, min: 0, max: 4, step: 0.05 });
+  const pAimSlack = panel.slider('Slack once inside (x)', {
+    key: 'aim-slack', value: 1.7, min: 1, max: 3, step: 0.05,
+    note: 'How much wider the window gets once you are in it. Without this the '
+        + 'hold almost never completes.' });
   const pAimHold = panel.slider('Hold to fire (s)', {
     key: 'aim-hold', value: 0.35, min: 0, max: 2, step: 0.05 });
   const pInSecs = panel.slider('Collapse (s)', { key: 'in-secs', value: 0.55, min: 0.1, max: 2, step: 0.05 });
@@ -212,37 +253,95 @@ async function main() {
     key: 'collapse-depth', value: 0.96, min: 0.2, max: 0.995, step: 0.005 });
   const pFlash = panel.slider('Flash', { key: 'flash', value: 2.6, min: 0, max: 8, step: 0.05 });
 
+  // --- the second errand ----------------------------------------------------
+  // The hand is sent somewhere the eye is given no reason to go. Nothing marks
+  // it; the only way to find it is to notice the pulse quickening.
+  panel.group('The spot');
+  const pSpotSep = panel.slider('Keep clear of the goal (deg)', {
+    key: 'spot-sep', value: 80, min: 20, max: 170, step: 5,
+    note: 'How far the motor\'s errand is placed from the eye\'s. Wide enough '
+        + 'that the two genuinely pull against each other.' });
+  const pSpotFromStart = panel.slider('Never starts closer than (deg)', {
+    key: 'spot-from-start', value: 85, min: 40, max: 140, step: 5,
+    note: 'Clearance from where the orb faces you when it is set down. This '
+        + 'has to stay well outside "counts as found", or the spot is already '
+        + 'half-discovered before anything is turned.' });
+  const pSpotReach = panel.slider('Felt from (deg)', {
+    key: 'spot-reach', value: 130, min: 30, max: 180, step: 5,
+    note: 'Outside this the pulse is at its slowest and weakest. Inside, both '
+        + 'climb the closer the spot comes to facing you.' });
+  const pSpotFound = panel.slider('Counts as found (deg)', {
+    key: 'spot-found-v2', value: 34, min: 5, max: 70, step: 1,
+    note: 'A scalar motor gives no direction, only warmth, so the target has '
+        + 'to be broad enough to stumble into. Too tight and it cannot be '
+        + 'found at all.' });
+  const pStillTurn = panel.slider('Counts as held still (deg/s)', {
+    key: 'spot-still', value: 25, min: 5, max: 90, step: 1 });
+  const pPulseAfter = panel.slider('Hold before the colour joins in (s)', {
+    key: 'spot-after', value: 1.6, min: 0, max: 6, step: 0.1,
+    note: 'Standing on the spot keeps the motor going even though nothing is '
+        + 'moving — the one place that rule is broken. Hold it this long and '
+        + 'the body starts pulsing on the same beat, which is the only '
+        + 'confirmation there is.' });
+  const pPulseFade = panel.slider('Colour pulse fades in over (s)', {
+    key: 'spot-fade', value: 1.2, min: 0.1, max: 5, step: 0.1 });
+  const pFoundBright = panel.slider('Colour pulse brightness', {
+    key: 'spot-bright', value: 0.85, min: 0, max: 1, step: 0.01,
+    note: 'This overrides the fade-to-nothing, so the body flashes back into '
+        + 'view on every beat while the orb sits perfectly still.' });
+  const pFoundTint = panel.slider('Colour pulse tint', {
+    key: 'spot-tint', value: 0.8, min: 0, max: 1, step: 0.01,
+    note: 'How far each flash pushes toward the "when moving" colour.' });
+
   // --- the motor, arguing ---------------------------------------------------
   panel.group('Haptics');
   const pHaptics = panel.toggle('Drive the motor', true, { key: 'haptics-on' });
-  const pHapAmp = panel.slider('Pulse strength', {
-    key: 'hap-amp', value: 0.9, min: 0, max: 1, step: 0.01 });
-  const pHzAway = panel.slider('Rate turning away (Hz)', {
-    key: 'hap-hz-away', value: 7, min: 0.5, max: 14, step: 0.1 });
-  const pHzToward = panel.slider('Rate turning toward (Hz)', {
-    key: 'hap-hz-toward', value: 1.2, min: 0.2, max: 14, step: 0.1,
-    note: 'The motor is the counter-argument: fast and hard when you turn away '
-        + 'from the point, slow and soft as you close on it.' });
-  const pAnti = panel.slider('How much closing in quiets it', {
-    key: 'hap-anti', value: 0.92, min: 0, max: 1, step: 0.01,
-    note: '1 = closing at full speed silences the motor entirely.' });
-  const pApproachFull = panel.slider('Closing speed that counts as full (deg/s)', {
-    key: 'hap-approach-full', value: 110, min: 20, max: 400, step: 5 });
-  const pApproachTau = panel.slider('Closing-speed smoothing (s)', {
-    key: 'hap-approach-tau', value: 0.14, min: 0.02, max: 1, step: 0.01 });
+  const pHzFar = panel.slider('Rate far from the spot (Hz)', {
+    key: 'hap-hz-far', value: 1.1, min: 0.2, max: 14, step: 0.1 });
+  const pHzNear = panel.slider('Rate on the spot (Hz)', {
+    key: 'hap-hz-near', value: 8, min: 0.2, max: 14, step: 0.1 });
+  const pAmpFar = panel.slider('Strength far from the spot', {
+    key: 'hap-amp-far-v2', value: 0.6, min: 0, max: 1, step: 0.01 });
+  const pAmpNear = panel.slider('Strength on the spot', {
+    key: 'hap-amp-near', value: 1, min: 0, max: 1, step: 0.01,
+    note: 'Rate and strength both climb toward the spot. Getting warmer is the '
+        + 'whole signal, so this wants plenty of range under it.' });
   const pPulseShape = panel.slider('Pulse shape', {
-    key: 'hap-shape', value: 2.2, min: 1, max: 6, step: 0.1,
-    note: 'Higher is a shorter, sharper knock inside each cycle.' });
-  const pHapFloor = panel.slider('Floor while turning', {
-    key: 'hap-floor', value: 0.06, min: 0, max: 0.5, step: 0.01 });
-  const pFireBuzz = panel.slider('Buzz through the collapse', {
-    key: 'hap-fire', value: 1, min: 0, max: 1, step: 0.01 });
+    key: 'hap-shape-v2', value: 1.5, min: 1, max: 6, step: 0.1,
+    note: 'Higher is a shorter, sharper knock inside each cycle — and a '
+        + 'shorter knock is a weaker one, because an ERM needs 40-60 ms just '
+        + 'to spin up. Low keeps the pulse fat enough to actually arrive.' });
+  const pHapFloor = panel.slider('Floor between knocks', {
+    key: 'hap-floor-v2', value: 0.2, min: 0, max: 0.5, step: 0.01,
+    note: 'Keeps the motor turning between knocks, so each one starts from a '
+        + 'spinning rotor rather than a standstill.' });
+  const pHapMoveFull = panel.slider('Turn that fully wakes the motor (deg/s)', {
+    key: 'hap-move-full', value: 45, min: 10, max: 200, step: 5,
+    note: 'Deliberately not the ramp the picture uses. Searching for the spot '
+        + 'is done with slow, hunting turns, and on the visual ramp -- which '
+        + 'wants 90 deg/s -- those barely open the gate at all. That, rather '
+        + 'than the strength, is what made it feel like nothing was there.' });
+  const pMoveGate = panel.slider('How much stillness quiets it', {
+    key: 'hap-move-gate-v2', value: 0.85, min: 0, max: 1, step: 0.01,
+    note: '1 = the motor says nothing unless the orb is being turned. Standing '
+        + 'on the spot overrides this whatever it is set to — which is what '
+        + 'makes arriving there unmistakable.' });
+  const pNoStrength = panel.slider('Refusal strength', {
+    key: 'hap-no-amp', value: 1, min: 0, max: 1, step: 0.01,
+    note: 'Reaching the collapsing point is the wrong answer as far as the '
+        + 'hand is concerned, so it gets two flat refusals rather than a '
+        + 'reward. No, no.' });
+  const pNoLen = panel.slider('Refusal pulse (s)', {
+    key: 'hap-no-len', value: 0.22, min: 0.05, max: 0.6, step: 0.01 });
+  const pNoGap = panel.slider('Refusal gap (s)', {
+    key: 'hap-no-gap', value: 0.14, min: 0.02, max: 0.5, step: 0.01 });
 
   panel.group('Live');
   panel.readout('turn speed (deg/s)', () => liveTurn.toFixed(0));
   panel.readout('visible', () => bodyVis.toFixed(2));
   panel.readout('goal off-centre (deg)', () => goalAngle.toFixed(0));
-  panel.readout('closing (deg/s)', () => approach.toFixed(0));
+  panel.readout('spot off-centre (deg)', () => spotAngle.toFixed(0));
+  panel.readout('held on the spot (s)', () => foundHold.toFixed(1));
   panel.readout('motor', () => motorLevel.toFixed(2));
   panel.readout('stage', () => String(stageIdx));
   panel.readout('fps', () => stage.fps.toFixed(0));
@@ -278,6 +377,7 @@ async function main() {
   const uFlash = uniform(float(0));
   const uVis = uniform(float(1));
   const uGoalVis = uniform(float(1));
+  const uPulse = uniform(float(0));       // the colour pulse, on the motor's beat
 
   // --- geometry -------------------------------------------------------------
   const geometry = buildCloud(MAX_POINTS);
@@ -296,11 +396,24 @@ async function main() {
     .mul(uGoalMix);                       // 0 at the rim, 1 at the throat
   const gFalloff = pow(gHole, float(1.6));
   const gSurge = float(1).add(uAim.mul(pAimSurge));
-  const gPull = gFalloff.mul(pGoalDepth).mul(gSurge);
+  // Saturated, and applied as a fraction of the radius rather than subtracted
+  // from it. As a subtraction, depth x surge can exceed the radius itself
+  // (0.5 x 2.2), which pushes the throat's centre through the origin and out
+  // the far side -- so the hole appears to vanish at the moment it is centred,
+  // which is exactly when it matters most.
+  const gPull = saturate(gFalloff.mul(pGoalDepth).mul(gSurge));
   const gPhi = atan(dot(dir, uGoalW), dot(dir, uGoalU));
   const gSwirl = sin(gPhi.mul(pGoalArms).sub(gHole.mul(pGoalTwist))
     .sub(time.mul(pGoalSpin))).mul(0.5).add(0.5);
   const gCore = smoothstep(pGoalEye, float(1.0), gHole);   // the dark eye of it
+
+  // A second, wider cone that only moves points -- it has no colour of its
+  // own. Everything inside it leans toward the axis, so the throat is fed from
+  // the surrounding field instead of being made only of the points that
+  // happened to start there.
+  const gWideEdge = cos(pGoalSize.mul(pGoalGather).mul(D2R));
+  const gWide = saturate(dot(dir, uGoalDir).sub(gWideEdge).div(float(1).sub(gWideEdge)))
+    .mul(uGoalMix);
 
   // Where this point sits, radially, before billboarding.
   const radius = Fn(() => {
@@ -316,7 +429,8 @@ async function main() {
     const wave = sin(phi.mul(pRipCount).add(uPhase.mul(uDir)))
       .mul(belt).mul(uRipple).mul(pRipDepth);
 
-    return float(1).add(shell).add(field.mul(uUndDepth)).add(wave).sub(gPull);
+    const rBase = float(1).add(shell).add(field.mul(uUndDepth)).add(wave);
+    return rBase.mul(float(1).sub(gPull.mul(0.96)));
   })();
 
   const flowT = time.mul(pFlowSpeed);
@@ -327,7 +441,14 @@ async function main() {
   // Inside the point, lean the whole direction toward its axis as well: a
   // purely radial pull is a dent, and a dent does not read as something being
   // swallowed.
-  const dirHole = normalize(mix(dir, uGoalDir, saturate(gFalloff.mul(pGoalConverge))));
+  // How hard this point was squeezed toward the axis. Kept as its own value
+  // because the shading has to undo it: a mix of `t` toward a point shrinks
+  // the angular scale by about (1-t), so the solid angle -- and with it the
+  // on-screen density -- goes as (1-t)^2. Left uncompensated, the funnel looks
+  // right from the side and becomes a solid blob end-on, which is exactly the
+  // view it is aimed from.
+  const gSqueeze = saturate(pow(gWide, float(1.8)).mul(pGoalConverge));
+  const dirHole = normalize(mix(dir, uGoalDir, gSqueeze));
 
   // The collapse is the same scale applied to everything, so the cloud draws
   // itself down to a point and comes back rather than deforming.
@@ -357,7 +478,9 @@ async function main() {
 
   material.colorNode = Fn(() => {
     const base = mix(uBody, uCrest, crest);
-    const tinted = mix(base, uMoving, uSpin.mul(pHeat));
+    // The colour pulse rides the same beat as the motor and pushes the same
+    // way movement does, so standing on the spot looks like being moved.
+    const tinted = mix(base, uMoving, saturate(uSpin.mul(pHeat).add(uPulse.mul(pFoundTint))));
     // uVis is the whole "only while moving" idea: multiplying the colour, not
     // the opacity, means additive blending takes it all the way to nothing.
     const bodyCol = tinted.mul(float(1).add(rim.mul(pRimGlow))).mul(uVis);
@@ -384,7 +507,8 @@ async function main() {
   // blending stacks a hundred of them, so a hundredth of the brightness each
   // still adds up to the brightest thing on screen.
   material.opacityNode = disc.mul(disc).mul(twinkle).mul(pBright)
-    .mul(float(1).sub(gCore.mul(0.98)));
+    .mul(float(1).sub(gCore.mul(0.98)))
+    .mul(pow(saturate(float(1).sub(gSqueeze)), pGoalDensity));
 
   const cloud = new THREE.Mesh(geometry, material);
   cloud.frustumCulled = false;
@@ -444,6 +568,33 @@ async function main() {
     goalW.crossVectors(goalScreen, goalU);
   }
 
+  // --- the spot the motor is steering toward --------------------------------
+  // Placed at random rather than opposite the goal: a fixed relationship would
+  // be learnable in one sitting, and then the conflict is just a rule the
+  // participant is following rather than two pulls being weighed.
+  const spotHome = new THREE.Vector3();
+  const spotBody = new THREE.Vector3();
+  const spotScreen = new THREE.Vector3();
+  const spotTarget = new THREE.Vector3();
+  const spotPick = new THREE.Vector3();
+
+  function placeSpot() {
+    for (let i = 0; i < 128; i++) {
+      spotPick.randomDirection();
+      if (spotPick.angleTo(goalHome) * DEG < pSpotSep.value) continue;
+      if (spotPick.angleTo(viewDir) * DEG < pSpotFromStart.value) continue;
+      spotHome.copy(spotPick);
+      return;
+    }
+    // A large separation leaves very little sphere to land on, so rejection
+    // sampling can come up empty. Directly opposite the goal always satisfies
+    // it, and is where the conflict is sharpest anyway.
+    spotHome.copy(goalHome).negate();
+  }
+  placeSpot();
+  spotBody.copy(spotHome);
+  spotScreen.copy(spotHome);
+
   // --- the chain of stages --------------------------------------------------
   // Stage 0 is whatever the pickers say, so the orb starts in exactly the
   // colours that were tuned. Every stage after is the previous goal, and the
@@ -451,35 +602,42 @@ async function main() {
   const curBody = new THREE.Color();
   const curCrest = new THREE.Color();
   const curMoving = new THREE.Color();
-  const goalBodyCol = new THREE.Color();
-  const goalCrestCol = new THREE.Color();
-  const goalMovingCol = new THREE.Color();
+  const nextCol = new THREE.Color();      // the vivid colour the orb will become
+  const shownBody = new THREE.Color();    // curBody, lifted when set down
   const hsl = { h: 0, s: 0, l: 0 };
+  // Manipulated in sRGB rather than the working space: these numbers are the
+  // ones the picker showed, so halving a lightness does what it looks like it
+  // should. In linear space the same arithmetic lands somewhere else.
+  const SRGB = THREE.SRGBColorSpace;
   let stageIdx = 0;
 
   const rotateHue = (c, step) => {
-    c.getHSL(hsl);
-    c.setHSL((hsl.h + step) % 1, hsl.s, hsl.l);
+    c.getHSL(hsl, SRGB);
+    c.setHSL((hsl.h + step + 1) % 1, hsl.s, hsl.l, SRGB);
   };
+
+  // One colour in, three out. The crests carry it whole and the body is a near
+  // black holding just enough of it to read as its shadow -- the shape the
+  // first stage was tuned into by hand, kept for every stage after.
+  function deriveStage(col) {
+    col.getHSL(hsl, SRGB);
+    curCrest.copy(col);
+    curBody.setHSL(hsl.h, Math.min(1, hsl.s * 1.2), hsl.l * pBodyDark.value, SRGB);
+    curMoving.setHSL((hsl.h + pMovingHue.value + 1) % 1, hsl.s,
+      hsl.l + (1 - hsl.l) * pMovingLift.value, SRGB);
+  }
 
   function syncStageZero() {
     curBody.copy(cCore.value);
     curCrest.copy(cCrest.value);
     curMoving.copy(cMoving.value);
-    goalBodyCol.copy(cGoalBody.value);
-    goalCrestCol.copy(cGoalCrest.value);
-    goalMovingCol.copy(cGoalMoving.value);
+    nextCol.copy(cBecomes.value);
   }
   syncStageZero();
 
   function advanceStage() {
-    curBody.copy(goalBodyCol);
-    curCrest.copy(goalCrestCol);
-    curMoving.copy(goalMovingCol);
-    const step = pHueStep.value;
-    rotateHue(goalBodyCol, step);
-    rotateHue(goalCrestCol, step);
-    rotateHue(goalMovingCol, step);
+    deriveStage(nextCol);
+    rotateHue(nextCol, pHueStep.value);
     stageIdx++;
 
     // A fresh point, put back where it belongs relative to the eye rather than
@@ -487,9 +645,12 @@ async function main() {
     // how the orb happens to be held right now.
     refreshGoalHome();
     goalBody.copy(goalHome).applyQuaternion(invAtt.copy(smoothed).invert());
+    // A new errand for the hand as well, or the second stage is a re-run.
+    placeSpot();
+    spotBody.copy(spotHome).applyQuaternion(invAtt);
     goalMix = 0;
     armed = false;
-    settle = 0.4;
+    foundHold = 0;
   }
 
   addEventListener('keydown', (e) => {
@@ -501,9 +662,11 @@ async function main() {
       syncStageZero();
       refreshGoalHome();
       goalBody.copy(goalHome);
+      placeSpot();
+      spotBody.copy(spotHome);
       goalMix = 0;
       armed = false;
-      settle = 0.4;
+      foundHold = 0;
     } else if (k === 't' && phaseState === 'idle') {
       // Fires the transition by hand. The collapse is most of what there is to
       // look at and it is a nuisance to have to earn it every time -- and with
@@ -521,12 +684,8 @@ async function main() {
   let started = false, hadHaptics = false;
 
   let heldAmt = 0, moveVis = 0, bodyVis = 1, goalVis = 1;
-  let goalAngle = 180, prevAngle = 180, approach = 0, aimNear = 0;
-  // Re-placing the point moves it without the wrist moving, and the closing
-  // speed is a difference over time -- so a placement reads as an enormous turn
-  // and the motor answers a gesture nobody made. Deaf for as long as the glide
-  // to the new spot takes.
-  let settle = 0;
+  let goalAngle = 180, aimNear = 0;
+  let spotAngle = 180, spotNear = 0, foundHold = 0, foundPulse = 0;
   let dwell = 0, armed = false, goalMix = 1, goalOpen = 0.1;
   let phaseState = 'idle', stateT = 0, collapse = 0;
   let hapPhase = 0, motorLevel = 0;
@@ -545,7 +704,9 @@ async function main() {
         // target moves — the eased direction glides there over a few frames.
         refreshGoalHome();
         goalBody.copy(goalHome);
-        settle = 0.4;
+        placeSpot();
+        spotBody.copy(spotHome);
+        foundHold = 0;
       } else {
         smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
       }
@@ -576,25 +737,30 @@ async function main() {
     if (pGoalTilt.value !== lastTilt) {
       refreshGoalHome();
       goalBody.copy(goalHome).applyQuaternion(invAtt.copy(smoothed).invert());
-      settle = 0.4;
     }
 
     goalTarget.copy(goalBody).applyQuaternion(smoothed).normalize();
     goalScreen.lerp(goalTarget, 1 - Math.exp(-dt * pFollow.value)).normalize();
     updateGoalBasis();
 
-    prevAngle = goalAngle;
     goalAngle = Math.acos(Math.max(-1, Math.min(1, goalScreen.dot(viewDir)))) * DEG;
 
-    // Positive = the point is being brought toward the eye. This, and only
-    // this, is what the motor argues with.
-    if (settle > 0) {
-      settle -= dt;
-      approach = 0;
-    } else {
-      const rawApproach = (prevAngle - goalAngle) / Math.max(dt, 1e-4);
-      approach += (rawApproach - approach) * (1 - Math.exp(-dt / Math.max(pApproachTau.value, 0.02)));
-    }
+    // --- and where the motor's spot is --------------------------------------
+    spotTarget.copy(spotBody).applyQuaternion(smoothed).normalize();
+    spotScreen.lerp(spotTarget, 1 - Math.exp(-dt * pFollow.value)).normalize();
+    spotAngle = Math.acos(Math.max(-1, Math.min(1, spotScreen.dot(viewDir)))) * DEG;
+
+    // Warmth: 0 at the edge of what can be felt, 1 once it is facing you.
+    spotNear = smooth01(ramp(pSpotReach.value - spotAngle,
+      0, Math.max(pSpotReach.value - pSpotFound.value, 1)));
+    // Eased rather than a switch, so arriving does not click.
+    const foundAmt = smooth01(ramp(pSpotFound.value - spotAngle, 0,
+      Math.max(pSpotFound.value * 0.6, 1)));
+
+    const still = liveTurn < pStillTurn.value;
+    if (spotAngle > pSpotFound.value) foundHold = Math.max(0, foundHold - dt * 2);
+    else if (still) foundHold += dt;      // holding it, but not while fidgeting
+    foundPulse = smooth01(ramp(foundHold - pPulseAfter.value, 0, pPulseFade.value));
 
     aimNear = smooth01(ramp(pAimWide.value - goalAngle, 0, Math.max(pAimWide.value - pAimAngle.value, 1)));
     // Fully open once it is inside the reacting angle, a rumour by the time it
@@ -608,11 +774,16 @@ async function main() {
     // --- fire ---------------------------------------------------------------
     if (phaseState === 'idle') {
       if (!armed && goalAngle > pAimWide.value) armed = true;
-      if (armed && goalAngle < pAimAngle.value) {
+      // Hysteresis. A bare threshold plus the tremor of a hand holding a ball
+      // means the dwell chatters across the edge and never completes -- and
+      // with the decay running faster than the build, every near-miss wipes
+      // the progress. Once you are in, it takes a bigger move to fall out.
+      const edge = dwell > 0 ? pAimAngle.value * pAimSlack.value : pAimAngle.value;
+      if (armed && goalAngle < edge) {
         dwell += dt;
         if (dwell >= pAimHold.value) { phaseState = 'in'; stateT = 0; dwell = 0; }
       } else {
-        dwell = Math.max(0, dwell - dt * 2);
+        dwell = Math.max(0, dwell - dt * 0.5);
       }
     } else {
       stateT += dt;
@@ -636,8 +807,18 @@ async function main() {
     const tau = moveTarget > moveVis ? pVisAttack.value : pVisRelease.value;
     moveVis += (moveTarget - moveVis) * (1 - Math.exp(-dt / Math.max(tau, 0.01)));
 
+    // The motor's beat, computed whether or not the motor is running: the
+    // colour pulse rides the same phase and has to stay in step with it.
+    const hz = pHzFar.value + (pHzNear.value - pHzFar.value) * spotNear;
+    hapPhase += hz * dt;
+    const wave = Math.pow(0.5 + 0.5 * Math.sin(hapPhase * Math.PI * 2), pPulseShape.value);
+    const colourPulse = phaseState === 'idle' ? foundPulse * wave : 0;
+
     const active = pDimFloor.value + (1 - pDimFloor.value) * moveVis;
     bodyVis = 1 + (active - 1) * heldAmt;
+    // Standing on the spot is the one thing allowed to break "only while
+    // moving": the body flashes back on every beat while nothing is moving.
+    bodyVis = Math.max(bodyVis, colourPulse * pFoundBright.value);
     const goalActive = Math.max(active, pGoalFloor.value);
     goalVis = 1 + (goalActive - 1) * heldAmt;
 
@@ -656,39 +837,53 @@ async function main() {
     uDrift.value = pFlowRest.value + (pFlowMoving.value - pFlowRest.value) * stirred;
 
     if (stageIdx === 0) syncStageZero();
-    uBody.value.copy(curBody);
+    // Set down, a derived stage's near-black body is lifted toward its crest
+    // colour -- otherwise "visible again when set down" is true of the
+    // brightness and false of anything you can actually see.
+    shownBody.copy(curBody);
+    if (stageIdx > 0) shownBody.lerp(curCrest, pRestLift.value * (1 - heldAmt));
+    uBody.value.copy(shownBody);
     uCrest.value.copy(curCrest);
     uMoving.value.copy(curMoving);
-    uGoalCol.value.copy(goalBodyCol);
+    uGoalCol.value.copy(nextCol);
 
     uGoalDir.value.copy(goalScreen);
     uGoalU.value.copy(goalU);
     uGoalW.value.copy(goalW);
     uGoalMix.value = goalMix;
-    uAim.value = phaseState === 'idle' ? aimNear : 1;
-    uGoalOpen.value = phaseState === 'idle' ? goalOpen : 1;
+    // Forced open only through the collapse -- during the bloom the *new*
+    // throat is the one on screen, and holding it wide there makes it flare
+    // and then drop away as the real values take over.
+    // Added, not maxed: aimNear has already saturated by the time the window
+    // is entered, so anything bounded by it cannot show the hold filling. This
+    // drives the surge past its normal ceiling instead, and the throat visibly
+    // winds up over the hold rather than firing out of nowhere.
+    const charging = aimNear + dwell / Math.max(pAimHold.value, 0.01);
+    uAim.value = phaseState === 'in' ? 1 : (phaseState === 'out' ? aimNear : charging);
+    uGoalOpen.value = phaseState === 'in' ? 1 : goalOpen;
     uCollapse.value = collapse;
     uFlash.value = pFlash.value * Math.pow(collapse, 3);
     uVis.value = bodyVis;
     uGoalVis.value = goalVis;
+    uPulse.value = colourPulse;
 
     // --- the motor, arguing -------------------------------------------------
     if (pHaptics.value) {
       if (phaseState !== 'idle') {
-        // Through the collapse it stops arguing and just confirms.
-        motorLevel = pFireBuzz.value * Math.max(collapse, 0.15);
-        hapPhase = 0;
+        // Reaching the collapsing point is the eye's win, not the hand's. Two
+        // flat refusals -- no, no -- and then silence, rather than a reward.
+        const since = stateT + (phaseState === 'out' ? pInSecs.value : 0);
+        const len = pNoLen.value;
+        const gap = pNoGap.value;
+        const knocking = since < len || (since >= len + gap && since < len * 2 + gap);
+        motorLevel = knocking ? pNoStrength.value : 0;
       } else {
-        // 0 = turning away or standing still, 1 = closing on the point fast.
-        const reward = clamp01(approach / Math.max(pApproachFull.value, 1));
-        const hz = pHzAway.value + (pHzToward.value - pHzAway.value) * reward;
-        hapPhase += hz * dt;
-        const wave = Math.pow(0.5 + 0.5 * Math.sin(hapPhase * Math.PI * 2), pPulseShape.value);
-        // `stirred` is the shared response curve, so how much turning counts
-        // as turning is still decided once, in the Motion tool.
-        const gate = Math.max(stirred, moveVis * 0.35);
-        const amp = pHapAmp.value * gate * (1 - reward * pAnti.value);
-        motorLevel = clamp01(amp * (pHapFloor.value + (1 - pHapFloor.value) * wave));
+        // Warmer is faster and harder, full stop. Nothing on screen says where
+        // the spot is, so the gradient itself has to carry the whole message.
+        const amp = pAmpFar.value + (pAmpNear.value - pAmpFar.value) * spotNear;
+        const hapMove = smooth01(ramp(liveTurn, pVisMin.value, pHapMoveFull.value));
+        const gate = Math.max(1 - pMoveGate.value * (1 - hapMove), foundAmt);
+        motorLevel = clamp01(amp * gate * (pHapFloor.value + (1 - pHapFloor.value) * wave));
       }
       orb.setHaptic(motorLevel);
       hadHaptics = true;

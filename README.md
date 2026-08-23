@@ -146,6 +146,16 @@ change, which is what makes it safe to do silently. Anything derived in body
 space and used against those lookups, such as a ripple axis, has to be carried
 into the same space or it drifts off.
 
+That lookup is a *conjugation*, though, and there is one case where it is the
+wrong tool. It is invisible for texture — nobody can tell that the noise is
+rotating about a re-mapped axis — but it means a turn of the wrist and the
+motion of a feature on screen no longer share an axis. Anything the participant
+is meant to *aim* has to be pushed through the attitude directly instead
+(`attitude * bodyVector`), and re-placed on each re-level rather than
+compensated. Attitude is exactly identity at the moment the orb is set down, so
+a placement made in screen terms is exact there. Counterpull's goal point does
+it this way; its cloud still uses the field lookup for everything else.
+
 **Turning only.** Linear acceleration is still measured and interpolated, and an
 experiment can read `motion.state.accel` directly, but nothing reacts to being
 carried any more.

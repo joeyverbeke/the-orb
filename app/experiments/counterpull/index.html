@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the orb — counterpull</title>
+<link rel="stylesheet" href="/src/styles/base.css">
+<style>
+  body { display:flex; flex-direction:column; overflow:hidden; height:100vh;
+         background:#05060a; }
+  .stage { position:relative; flex:1; min-height:0; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .note {
+    position:absolute; left:18px; bottom:16px; color:var(--dim);
+    font-size:11px; line-height:1.6; max-width:46ch; pointer-events:none;
+  }
+  .note b { color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="stage"><canvas id="view"></canvas></div>
+  <div class="note">
+    Set down, the body sits at full colour. <b>Pick it up and it goes dark</b> —
+    it only exists while it is being turned.<br>
+    Somewhere past the top edge is a point the cloud is draining into. Bring it
+    round to face you and hold it there. <b>t</b> — fire it by hand.<br>
+    The motor disagrees: it pulses hardest when you turn away from that point,
+    and falls quiet as you close on it. <b>r</b> — start the chain over.
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

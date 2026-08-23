@@ -34,7 +34,17 @@ import { sensorQuaternion, angularVelocity, linearAccel } from './frame.js';
 
 const CAPACITY = 180;          // ~1.8 s at 100 Hz
 
-export function createMotion(orb, { delayMs = 70 } = {}) {
+// `relevel: false` opts out of all of that, and is the better answer for a
+// sphere. Re-levelling was justified by the sensor's zero being arbitrary --
+// but the pose a *ball* is set down in is equally arbitrary, and it changes
+// every time. So it trades a fixed arbitrary frame for a moving one, and
+// throws away the one honest reference there is: gravity. Attitude changes by
+// `home^-1 R home`, so a room-frame gesture is conjugated by whatever pose was
+// last levelled in -- set the orb down turned around and the horizontal axes
+// invert. Left alone, the BNO085's gravity-referenced frame keeps up as up and
+// the mapping identical from every pose. What it cannot know is which way the
+// participant is sitting; that is `tareHeading()`, and it is theirs to declare.
+export function createMotion(orb, { delayMs = 70, relevel = true } = {}) {
   const times = new Float64Array(CAPACITY);
   const quats = Array.from({ length: CAPACITY }, () => new Quaternion());
   const omegas = Array.from({ length: CAPACITY }, () => new Vector3());
@@ -78,9 +88,17 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     if (count < CAPACITY) count++;
 
     const isHeld = f.held > 0.5;
-    // Re-level the moment it is set down: the first frame of stillness, not
-    // the last of handling.
-    if ((!levelled || (wasHeld && !isHeld))) relevel(quats[i]);
+    if (relevel) {
+      // Re-level the moment it is set down: the first frame of stillness, not
+      // the last of handling.
+      if (!levelled || (wasHeld && !isHeld)) doRelevel(quats[i]);
+    } else if (!levelled) {
+      // Zero the heading once, so the frame is at least repeatable -- the game
+      // rotation vector's yaw origin is whatever the sensor woke up at. Once,
+      // at startup, and never on set-down: doing it there is the bug.
+      takeHeading(quats[i]);
+      levelled = true;
+    }
     wasHeld = isHeld;
 
     const observed = performance.now() - f.t_ms;
@@ -95,7 +113,17 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
   // neutral one, which differs by a conjugation -- a turn about the body's X
   // axis then renders as a smear across all three, looking as though the axes
   // are wired together. The debug page has always done it this way.
-  function relevel(raw) {
+  // Keep only the rotation about three's up axis (swing-twist). Dropping the
+  // swing is what leaves tilt alone, so gravity still decides which way is up.
+  function takeHeading(raw) {
+    const len = Math.hypot(raw.y, raw.w);
+    if (len < 1e-6) return false;          // straight over: no heading to read
+    home.set(0, raw.y / len, 0, raw.w / len);
+    homeInv.copy(home).invert();
+    return true;
+  }
+
+  function doRelevel(raw) {
     if (levelled) {
       // What the body is showing right now becomes what the field has to undo,
       // so the image is unchanged across the switch.
@@ -134,24 +162,30 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     set delayMs(v) { delayMs = v; },
 
     /**
-     * Make the pose the orb is in right now the new neutral, without waiting
-     * for it to be set down -- for moments an experiment declares to be a
-     * fresh start while the orb is still in the hand.
+     * Declare the heading the orb is at right now to be the reference. Yaw
+     * only -- tilt is left to gravity, which is already right.
      *
-     * It levels against the pose at the *render clock*, not the newest sample.
-     * Those are `delayMs` apart, and what has to become level is the pose the
-     * participant is looking at and holding, not the one the buffer has run on
-     * to. `state.quaternion` is `home^-1 * raw`, so `home * state.quaternion`
-     * recovers exactly that raw pose.
+     * This is the one thing no IMU can work out for itself: where the
+     * participant is sitting is a fact about the room, not about the device.
+     * Even a working magnetometer only gives magnetic north, and something
+     * still has to say where the screen is relative to it. So it is declared,
+     * at a moment that carries intent -- never inferred from how the ball
+     * happened to come to rest.
      *
-     * Bumps `epoch` like any other re-levelling, so a caller that already
-     * handles the set-down case needs no new branch.
+     * Levels against the pose at the *render clock*, not the newest sample:
+     * those are `delayMs` apart, and what has to become the reference is the
+     * pose being held and looked at. `state.quaternion` is `home^-1 * raw`, so
+     * `home * state.quaternion` recovers that raw pose.
      *
-     * @returns false if there is nothing to level against yet.
+     * Bumps `epoch`; the picture does turn about the vertical when the
+     * reference moves, and that is the point of it.
+     *
+     * @returns false if there is nothing to read a heading from yet.
      */
-    relevelHere() {
-      if (!levelled || !state.valid) return false;
-      relevel(here.copy(home).multiply(state.quaternion));
+    tareHeading() {
+      if (!state.valid) return false;
+      if (!takeHeading(here.copy(home).multiply(state.quaternion))) return false;
+      epoch++;
       return true;
     },
 

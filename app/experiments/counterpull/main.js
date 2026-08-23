@@ -551,29 +551,19 @@ async function main() {
   scene.add(cloud);
 
   // --- device ---------------------------------------------------------------
-  const motion = createMotion(orb, { delayMs: pDelay.value });
+  // No re-levelling. Up comes from gravity and never moves, so a turn of the
+  // wrist maps to the same movement on screen from every pose -- which is the
+  // whole of what was wrong before. Setting the orb down changes nothing now;
+  // heading is declared with `h`, at a moment that carries intent.
+  const motion = createMotion(orb, { delayMs: pDelay.value, relevel: false });
   const response = createResponse();
   const smoothed = new THREE.Quaternion();
+  // The whole lookup, now that the frame never moves: L = A^-1. A feature at
+  // field coordinate p lands on screen at A p and turns by exactly the wrist
+  // rotation -- the same as the hole, which is placed as A * goalBody. There is
+  // nothing left to compensate, so the compensation is gone: no `field`, no
+  // conjugation, and none of the drift that came with it.
   const lookup = new THREE.Quaternion();
-  // Our own re-level compensation, replacing motion.js's `field`.
-  //
-  // `field` is applied on the left (L = A^-1 F), so a feature painted at field
-  // coord p lands on screen at F^-1 A p -- and a wrist rotation d moves it by
-  // F^-1 d F. Same angle, a different axis: measured against a plausible F,
-  // ~50 degrees different. The hole is placed as A * goalBody and moves by
-  // exactly d, so the two disagree and the hole appears to crawl across the
-  // cloud as the orb is turned.
-  //
-  // Multiplying on the other side fixes it. With L = C^-1 A^-1 a feature lands
-  // at A C p and moves by d, exactly as the hole does, so the hole is welded to
-  // the cloud. Re-levelling stays invisible because C absorbs the change:
-  //
-  //     C_new = A_new^-1 * A_old * C_old
-  //
-  // is the unique C that leaves L untouched across the switch.
-  const fieldC = new THREE.Quaternion();
-  const fieldCInv = new THREE.Quaternion();
-  const relQ = new THREE.Quaternion();
   const lookupMat = new THREE.Matrix3();
   const lookupM4 = new THREE.Matrix4();
   const axis = new THREE.Vector3(0, 1, 0);
@@ -652,6 +642,19 @@ async function main() {
   spotBody.copy(spotHome);
   spotScreen.copy(spotHome);
 
+  // Both errands, placed against the view as it is right now: the hole on the
+  // far side and tilted up until it just crests the top, the spot somewhere
+  // random and well out of reach. Nothing here reads the orb's pose except
+  // through `smoothed`, so it lands correctly however the orb is being held.
+  function placeErrands() {
+    refreshGoalHome();
+    invAtt.copy(smoothed).invert();
+    goalBody.copy(goalHome).applyQuaternion(invAtt);
+    placeSpot();
+    spotBody.copy(spotHome).applyQuaternion(invAtt);
+    foundHold = 0;
+  }
+
   // --- the chain of stages --------------------------------------------------
   // Stage 0 is whatever the pickers say, so the orb starts in exactly the
   // colours that were tuned. Every stage after is the previous goal, and the
@@ -699,30 +702,13 @@ async function main() {
     rotateHue(nextCol, pHueStep.value);
     stageIdx++;
 
-    // Whatever pose the orb is in when it turns over becomes the new neutral.
-    //
-    // Placement was never the problem -- both errands are placed against the
-    // current view, so they land correctly either way. The pose is. The
-    // participant has just rotated to get here and carries on from here, and
-    // if "level" is still wherever the orb was last set down, a turn of the
-    // wrist and the movement on screen no longer share an axis. Winning at the
-    // hole hides this: it is very nearly a pure pitch forward, so the orb ends
-    // up close to level anyway. The spot sits anywhere, so winning there can
-    // leave the orb rolled right over, and everything after it feels wrong.
-    //
-    // Re-levelling bumps the epoch, so the branch that already handles being
-    // set down re-places both errands next frame, in home coordinates that now
-    // mean what they say.
-    refreshGoalHome();
-    if (!motion.relevelHere()) {
-      // Nothing to level against (no orb yet): place them directly.
-      goalBody.copy(goalHome).applyQuaternion(invAtt.copy(smoothed).invert());
-      placeSpot();
-      spotBody.copy(spotHome).applyQuaternion(invAtt);
-    }
+    // No re-levelling here any more. That was an attempt to make the mapping
+    // consistent from this instant on; with the frame fixed to gravity it is
+    // consistent from every instant, and re-basing it on whatever pose the win
+    // happened in is exactly what made the spot's win feel wrong.
+    placeErrands();
     goalMix = 0;
     armed = false;
-    foundHold = 0;
   }
 
   addEventListener('keydown', (e) => {
@@ -733,13 +719,12 @@ async function main() {
       stageIdx = 0;
       goalWins = 0;
       syncStageZero();
-      refreshGoalHome();
-      goalBody.copy(goalHome);
-      placeSpot();
-      spotBody.copy(spotHome);
+      placeErrands();
       goalMix = 0;
       armed = false;
-      foundHold = 0;
+    } else if (k === 'h') {
+      // "This way is me." The only thing gravity cannot tell us.
+      motion.tareHeading();
     } else if (k === 't' && phaseState === 'idle') {
       // Fires the transition by hand. The collapse is most of what there is to
       // look at and it is a nuisance to have to earn it every time -- and with
@@ -777,25 +762,12 @@ async function main() {
 
     if (m.valid) {
       if (relevelled) {
-        // Fold the old attitude into C before the snap, so the picture is
-        // identical on either side of the re-level. `smoothed` is still the
-        // attitude that is on screen right now, which is the one that must
-        // not move.
-        if (started) {
-          fieldC.premultiply(smoothed)
-            .premultiply(relQ.copy(m.quaternion).invert());
-          fieldCInv.copy(fieldC).invert();
-        }
+        // Only a declared heading tare reaches here now. It does turn the
+        // picture about the vertical, which is the point of it, so snap rather
+        // than drag the body across a frame that has already moved.
         smoothed.copy(m.quaternion);
         lastEpoch = m.epoch;
-        started = true;
-        // Set down means the secret goes back to the far side. Only the
-        // target moves — the eased direction glides there over a few frames.
-        refreshGoalHome();
-        goalBody.copy(goalHome);
-        placeSpot();
-        spotBody.copy(spotHome);
-        foundHold = 0;
+        if (!started) { started = true; placeErrands(); }
       } else {
         smoothed.slerp(m.quaternion, 1 - Math.exp(-dt * pFollow.value));
       }
@@ -925,11 +897,15 @@ async function main() {
 
     // --- only visible while moving ------------------------------------------
     const heldTarget = orb.latest && orb.latest.held > 0.5 ? 1 : 0;
-    // Setting the orb down ends the session, and the hole forgets it was ever
-    // caught: it is playing fair again for whoever picks it up next. Read off
-    // `held` rather than the re-levelling epoch, because the transition now
-    // re-levels too and that must not count as a new session.
-    if (wasHeld && !heldTarget) goalWins = 0;
+    // Setting the orb down ends the session: the hole forgets it was ever
+    // caught and goes back to the far side, and the spot is hidden again.
+    // This used to ride on the re-levelling epoch; now that setting the orb
+    // down changes no frames, it is read off `held` directly, which is what it
+    // always meant.
+    if (wasHeld && !heldTarget) {
+      goalWins = 0;
+      placeErrands();
+    }
     wasHeld = !!heldTarget;
     heldAmt += (heldTarget - heldAmt) * (1 - Math.exp(-dt * 6));
 
@@ -953,15 +929,15 @@ async function main() {
     goalVis = 1 + (goalActive - 1) * heldAmt;
 
     // --- uniforms -----------------------------------------------------------
-    lookup.copy(smoothed).invert().premultiply(fieldCInv);
+    lookup.copy(smoothed).invert();
     lookupMat.setFromMatrix4(lookupM4.makeRotationFromQuaternion(lookup));
     uField.value.copy(lookupMat);
-    // The spin axis and its basis come off the gyro, so they are already in
-    // body coordinates; a body direction b sits at field coordinate C^-1 b.
-    // Putting them through L instead would apply the attitude a second time.
-    uAxis.value.copy(axis).applyQuaternion(fieldCInv);
-    uU.value.copy(basisU).applyQuaternion(fieldCInv);
-    uW.value.copy(basisW).applyQuaternion(fieldCInv);
+    // Straight through. These come off the gyro in body coordinates, and with
+    // L = A^-1 a body direction *is* its own field coordinate, so the transform
+    // that used to be here was the attitude applied a second time.
+    uAxis.value.copy(axis);
+    uU.value.copy(basisU);
+    uW.value.copy(basisW);
     uPhase.value = phase;
     uRipple.value = pRipples.value ? ripple : 0;
     uSpin.value = spin;

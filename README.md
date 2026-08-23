@@ -138,15 +138,37 @@ the pose it is left in becomes the new neutral and attitude is reported relative
 to that. This is why an experiment looks upright when picked up while the raw
 sensor attitude does not.
 
-`motion.relevelHere()` does the same thing on demand, for a moment an experiment
-declares to be a fresh start while the orb is still in the hand. It levels
-against the pose at the *render clock* rather than the newest sample — those are
-`delayMs` apart, and what has to become level is the pose being looked at and
-held. Counterpull calls it on every transition: placement is not the issue
-(both its targets are placed against the current view either way), the pose is.
-Whoever has just rotated to win carries on from where they are, and if "level"
-is still wherever the orb was last set down, a turn of the wrist and the
-movement on screen stop sharing an axis.
+**And for a sphere it is the wrong idea.** Re-levelling was justified by the
+sensor's own zero being arbitrary — but the pose a *ball* is set down in is
+equally arbitrary, and unlike the sensor's zero it changes every time. It trades
+a fixed arbitrary frame for a moving one, and throws away the only honest
+reference there is. Attitude changes by `home⁻¹ · R · home`, so a room-frame
+gesture is conjugated by whatever pose was last levelled in. Set the orb down
+turned around and the horizontal axes invert — the same wrist movement, the
+opposite direction on screen:
+
+```
+                          fixed gravity frame      re-levelled frame
+same wrist tilt, held...
+  level                        [ 1, 0, 0 ]           [  1,     0,     0    ]
+  yaw 180                      [ 1, 0, 0 ]           [ -1,     0,     0    ]
+  rolled 90                    [ 1, 0, 0 ]           [  0,    -1,     0    ]
+  arbitrary                    [ 1, 0, 0 ]           [ -0.34, -0.92, -0.19 ]
+```
+
+Pass `relevel: false` and none of it happens: the BNO085's frame is already
+gravity-referenced, so up stays up and the mapping is identical from every pose.
+Setting the orb down changes nothing. Counterpull runs this way, which is also
+why it needs no `field` compensation — with `L = A⁻¹` a feature turns by exactly
+the wrist rotation, the same as anything placed as `attitude * bodyVector`, so
+the conjugation problem below cannot arise at all.
+
+The one thing left over is which horizontal direction is "toward the
+participant". No IMU can know that — it is a fact about the room, not the
+device; even a working magnetometer gives magnetic north and still needs to be
+told where the screen is. `motion.tareHeading()` declares it: yaw only, tilt
+left to gravity, at a moment that carries intent. Never infer it from how the
+ball came to rest — that is the bug above.
 
 Re-levelling would normally make the picture jump, since surface features are
 fixed to the body and the body has just been redefined. `motion.state.field`

@@ -138,6 +138,16 @@ the pose it is left in becomes the new neutral and attitude is reported relative
 to that. This is why an experiment looks upright when picked up while the raw
 sensor attitude does not.
 
+`motion.relevelHere()` does the same thing on demand, for a moment an experiment
+declares to be a fresh start while the orb is still in the hand. It levels
+against the pose at the *render clock* rather than the newest sample — those are
+`delayMs` apart, and what has to become level is the pose being looked at and
+held. Counterpull calls it on every transition: placement is not the issue
+(both its targets are placed against the current view either way), the pose is.
+Whoever has just rotated to win carries on from where they are, and if "level"
+is still wherever the orb was last set down, a turn of the wrist and the
+movement on screen stop sharing an axis.
+
 Re-levelling would normally make the picture jump, since surface features are
 fixed to the body and the body has just been redefined. `motion.state.field`
 counter-rotates by exactly the amount the body moved — look every object-space
@@ -146,15 +156,27 @@ change, which is what makes it safe to do silently. Anything derived in body
 space and used against those lookups, such as a ripple axis, has to be carried
 into the same space or it drifts off.
 
-That lookup is a *conjugation*, though, and there is one case where it is the
-wrong tool. It is invisible for texture — nobody can tell that the noise is
-rotating about a re-mapped axis — but it means a turn of the wrist and the
-motion of a feature on screen no longer share an axis. Anything the participant
-is meant to *aim* has to be pushed through the attitude directly instead
-(`attitude * bodyVector`), and re-placed on each re-level rather than
-compensated. Attitude is exactly identity at the moment the orb is set down, so
-a placement made in screen terms is exact there. Counterpull's goal point does
-it this way; its cloud still uses the field lookup for everything else.
+That lookup is a *conjugation*, and it is worth knowing what that costs. A
+feature painted at field coordinate `p` lands on screen at `F⁻¹ A p`, so a turn
+of the wrist `d` moves it by `F⁻¹ d F` — the same angle about a different axis,
+and once `F` has absorbed a few re-levels that axis is tens of degrees out. On
+its own this is invisible: noise rotating about a re-mapped axis is still noise.
+Put something the participant can *aim* on the same sphere, though — placed the
+honest way, as `attitude * bodyVector` — and the disagreement shows plainly: the
+marker crawls across the cloud as the orb is turned, which reads as the marker
+being broken when it is the only part that is right.
+
+The fix is which side the compensation multiplies on. With `L = C⁻¹ A⁻¹` a
+feature lands at `A C p` and moves by exactly `d`, the same as the marker, so the
+two are welded together — and re-levelling stays invisible, because
+
+```
+C_new = A_new⁻¹ · A_old · C_old
+```
+
+is the unique `C` that leaves `L` unchanged across the switch. Counterpull
+carries its own `C` for this reason; `motion.js` still hands out `field` for the
+experiments built on it.
 
 **Turning only.** Linear acceleration is still measured and interpolated, and an
 experiment can read `motion.state.accel` directly, but nothing reacts to being

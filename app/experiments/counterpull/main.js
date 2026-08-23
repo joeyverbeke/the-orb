@@ -232,6 +232,26 @@ async function main() {
     note: 'The first transition lands on the colour above. After that each new '
         + 'stage is the last one rotated by this.' });
 
+  // --- when the hole stops playing fair -------------------------------------
+  panel.group('Evasion');
+  const pEvadeAfter = panel.slider('Catches before it backs away', {
+    key: 'evade-after', value: 2, min: 0, max: 6, step: 1,
+    note: 'After this many turns won at the hole, it stops being catchable and '
+        + 'starts keeping its distance. Winning at the spot puts it back to '
+        + 'nought, so the two errands take it in turns.' });
+  const pFleeFrom = panel.slider('Starts backing away at (deg)', {
+    key: 'flee-from', value: 75, min: 20, max: 150, step: 5 });
+  const pFleeFloor = panel.slider('Never closer than (deg)', {
+    key: 'flee-floor', value: 45, min: 25, max: 120, step: 1,
+    note: 'A hard stop, not a tendency — it is pushed back out the instant it '
+        + 'is inside. Keep it well clear of the aim window (which opens at 20 '
+        + 'and slackens to ~34) or a fast enough turn could still land it.' });
+  const pFleeSpeed = panel.slider('Backs away at (deg/s)', {
+    key: 'flee-speed', value: 130, min: 20, max: 400, step: 5,
+    note: 'How fast it slides once you are inside. The hard stop is what '
+        + 'guarantees it cannot be cornered; this is what makes the retreat '
+        + 'legible as a retreat rather than a wall.' });
+
   panel.group('Transition');
   const pAimAngle = panel.slider('Counts as centred (deg)', {
     key: 'aim-angle-v2', value: 20, min: 3, max: 45, step: 1 });
@@ -285,6 +305,12 @@ async function main() {
         + 'confirmation there is.' });
   const pPulseFade = panel.slider('Colour pulse fades in over (s)', {
     key: 'spot-fade', value: 1.2, min: 0.1, max: 5, step: 0.1 });
+  const pSpotFire = panel.slider('Hold past the pulse to fire (s)', {
+    key: 'spot-fire', value: 2.5, min: 0.5, max: 8, step: 0.1,
+    note: 'Keep standing on the spot this long after the colour joins in and '
+        + 'the orb turns over from here instead. This is the second route, '
+        + 'and once the hole starts backing away it is the only one — so the '
+        + 'colour pulse stops being a confirmation and becomes a countdown.' });
   const pFoundBright = panel.slider('Colour pulse brightness', {
     key: 'spot-bright', value: 0.85, min: 0, max: 1, step: 0.01,
     note: 'This overrides the fade-to-nothing, so the body flashes back into '
@@ -326,6 +352,11 @@ async function main() {
     note: '1 = the motor says nothing unless the orb is being turned. Standing '
         + 'on the spot overrides this whatever it is set to — which is what '
         + 'makes arriving there unmistakable.' });
+  const pYesStrength = panel.slider('Reward strength', {
+    key: 'hap-yes', value: 1, min: 0, max: 1, step: 0.01,
+    note: 'Winning at the spot is the hand\'s errand, so it gets a swell that '
+        + 'rises and falls with the collapse — the opposite shape to the two '
+        + 'flat knocks the eye\'s win earns.' });
   const pNoStrength = panel.slider('Refusal strength', {
     key: 'hap-no-amp', value: 1, min: 0, max: 1, step: 0.01,
     note: 'Reaching the collapsing point is the wrong answer as far as the '
@@ -338,11 +369,16 @@ async function main() {
 
   panel.group('Live');
   panel.readout('turn speed (deg/s)', () => liveTurn.toFixed(0));
+  // How far the orb is from neutral. Should drop to ~0 on every transition
+  // and on every set-down; anything else means a re-level did not take.
+  panel.readout('attitude (deg)', () =>
+    (2 * Math.acos(Math.min(1, Math.abs(smoothed.w))) * DEG).toFixed(0));
   panel.readout('visible', () => bodyVis.toFixed(2));
   panel.readout('goal off-centre (deg)', () => goalAngle.toFixed(0));
   panel.readout('spot off-centre (deg)', () => spotAngle.toFixed(0));
   panel.readout('held on the spot (s)', () => foundHold.toFixed(1));
   panel.readout('motor', () => motorLevel.toFixed(2));
+  panel.readout('hole caught', () => goalWins + (evading ? ' — backing away' : ''));
   panel.readout('stage', () => String(stageIdx));
   panel.readout('fps', () => stage.fps.toFixed(0));
   panel.actions();
@@ -519,6 +555,25 @@ async function main() {
   const response = createResponse();
   const smoothed = new THREE.Quaternion();
   const lookup = new THREE.Quaternion();
+  // Our own re-level compensation, replacing motion.js's `field`.
+  //
+  // `field` is applied on the left (L = A^-1 F), so a feature painted at field
+  // coord p lands on screen at F^-1 A p -- and a wrist rotation d moves it by
+  // F^-1 d F. Same angle, a different axis: measured against a plausible F,
+  // ~50 degrees different. The hole is placed as A * goalBody and moves by
+  // exactly d, so the two disagree and the hole appears to crawl across the
+  // cloud as the orb is turned.
+  //
+  // Multiplying on the other side fixes it. With L = C^-1 A^-1 a feature lands
+  // at A C p and moves by d, exactly as the hole does, so the hole is welded to
+  // the cloud. Re-levelling stays invisible because C absorbs the change:
+  //
+  //     C_new = A_new^-1 * A_old * C_old
+  //
+  // is the unique C that leaves L untouched across the switch.
+  const fieldC = new THREE.Quaternion();
+  const fieldCInv = new THREE.Quaternion();
+  const relQ = new THREE.Quaternion();
   const lookupMat = new THREE.Matrix3();
   const lookupM4 = new THREE.Matrix4();
   const axis = new THREE.Vector3(0, 1, 0);
@@ -577,6 +632,8 @@ async function main() {
   const spotScreen = new THREE.Vector3();
   const spotTarget = new THREE.Vector3();
   const spotPick = new THREE.Vector3();
+  const fleeAxis = new THREE.Vector3();
+  const fleeQ = new THREE.Quaternion();
 
   function placeSpot() {
     for (let i = 0; i < 128; i++) {
@@ -636,18 +693,33 @@ async function main() {
   syncStageZero();
 
   function advanceStage() {
+    if (fireSource === 'spot') goalWins = 0;
+    else goalWins++;
     deriveStage(nextCol);
     rotateHue(nextCol, pHueStep.value);
     stageIdx++;
 
-    // A fresh point, put back where it belongs relative to the eye rather than
-    // relative to the device, so the same gesture is asked for again no matter
-    // how the orb happens to be held right now.
+    // Whatever pose the orb is in when it turns over becomes the new neutral.
+    //
+    // Placement was never the problem -- both errands are placed against the
+    // current view, so they land correctly either way. The pose is. The
+    // participant has just rotated to get here and carries on from here, and
+    // if "level" is still wherever the orb was last set down, a turn of the
+    // wrist and the movement on screen no longer share an axis. Winning at the
+    // hole hides this: it is very nearly a pure pitch forward, so the orb ends
+    // up close to level anyway. The spot sits anywhere, so winning there can
+    // leave the orb rolled right over, and everything after it feels wrong.
+    //
+    // Re-levelling bumps the epoch, so the branch that already handles being
+    // set down re-places both errands next frame, in home coordinates that now
+    // mean what they say.
     refreshGoalHome();
-    goalBody.copy(goalHome).applyQuaternion(invAtt.copy(smoothed).invert());
-    // A new errand for the hand as well, or the second stage is a re-run.
-    placeSpot();
-    spotBody.copy(spotHome).applyQuaternion(invAtt);
+    if (!motion.relevelHere()) {
+      // Nothing to level against (no orb yet): place them directly.
+      goalBody.copy(goalHome).applyQuaternion(invAtt.copy(smoothed).invert());
+      placeSpot();
+      spotBody.copy(spotHome).applyQuaternion(invAtt);
+    }
     goalMix = 0;
     armed = false;
     foundHold = 0;
@@ -659,6 +731,7 @@ async function main() {
     const k = e.key.toLowerCase();
     if (k === 'r') {
       stageIdx = 0;
+      goalWins = 0;
       syncStageZero();
       refreshGoalHome();
       goalBody.copy(goalHome);
@@ -674,6 +747,7 @@ async function main() {
       phaseState = 'in';
       stateT = 0;
       dwell = 0;
+      fireSource = 'goal';
     }
   });
 
@@ -687,6 +761,12 @@ async function main() {
   let goalAngle = 180, aimNear = 0;
   let spotAngle = 180, spotNear = 0, foundHold = 0, foundPulse = 0;
   let dwell = 0, armed = false, goalMix = 1, goalOpen = 0.1;
+  // Turns won at the hole since the last one won at the spot. Past the
+  // threshold the hole stops being catchable and the spot is the only way on.
+  // Turns won at the hole since the last one won at the spot -- and only
+  // within one spell in the hand. See the set-down check below.
+  let goalWins = 0, evading = false, fireSource = 'goal';
+  let wasHeld = false;
   let phaseState = 'idle', stateT = 0, collapse = 0;
   let hapPhase = 0, motorLevel = 0;
 
@@ -697,6 +777,15 @@ async function main() {
 
     if (m.valid) {
       if (relevelled) {
+        // Fold the old attitude into C before the snap, so the picture is
+        // identical on either side of the re-level. `smoothed` is still the
+        // attitude that is on screen right now, which is the one that must
+        // not move.
+        if (started) {
+          fieldC.premultiply(smoothed)
+            .premultiply(relQ.copy(m.quaternion).invert());
+          fieldCInv.copy(fieldC).invert();
+        }
         smoothed.copy(m.quaternion);
         lastEpoch = m.epoch;
         started = true;
@@ -740,6 +829,32 @@ async function main() {
     }
 
     goalTarget.copy(goalBody).applyQuaternion(smoothed).normalize();
+
+    // --- the hole stops playing fair ----------------------------------------
+    // Once it has been caught enough times it slides around the orb to keep
+    // its distance from the eye: gently at the outer radius, harder the closer
+    // you get, and hard-stopped outside the aim window so it cannot be
+    // cornered by turning faster. Rotating about cross(viewDir, goal) is the
+    // one axis that moves it directly away from the eye; carried into body
+    // space so the retreat is a real move of the hole, not a screen effect.
+    evading = goalWins >= pEvadeAfter.value;
+    if (evading && phaseState === 'idle') {
+      const off = Math.acos(Math.max(-1, Math.min(1, goalTarget.dot(viewDir)))) * DEG;
+      const urgency = smooth01(ramp(pFleeFrom.value - off, 0,
+        Math.max(pFleeFrom.value - pFleeFloor.value, 1)));
+      const push = pFleeSpeed.value * urgency * dt
+        + Math.max(0, pFleeFloor.value - off);
+      if (push > 0) {
+        fleeAxis.crossVectors(viewDir, goalTarget);
+        // Dead centre has no "away" to point at; any perpendicular will do.
+        if (fleeAxis.lengthSq() < 1e-8) fleeAxis.set(1, 0, 0);
+        fleeAxis.normalize().applyQuaternion(invAtt.copy(smoothed).invert());
+        fleeQ.setFromAxisAngle(fleeAxis, push * D2R);
+        goalBody.applyQuaternion(fleeQ).normalize();
+        goalTarget.copy(goalBody).applyQuaternion(smoothed).normalize();
+      }
+    }
+
     goalScreen.lerp(goalTarget, 1 - Math.exp(-dt * pFollow.value)).normalize();
     updateGoalBasis();
 
@@ -781,9 +896,18 @@ async function main() {
       const edge = dwell > 0 ? pAimAngle.value * pAimSlack.value : pAimAngle.value;
       if (armed && goalAngle < edge) {
         dwell += dt;
-        if (dwell >= pAimHold.value) { phaseState = 'in'; stateT = 0; dwell = 0; }
+        if (dwell >= pAimHold.value) {
+          phaseState = 'in'; stateT = 0; dwell = 0; fireSource = 'goal';
+        }
       } else {
         dwell = Math.max(0, dwell - dt * 0.5);
+      }
+
+      // The other way through. Standing on the spot long enough turns the orb
+      // over from there instead -- and once the hole is backing away, this is
+      // the only route left.
+      if (foundHold >= pPulseAfter.value + pSpotFire.value) {
+        phaseState = 'in'; stateT = 0; dwell = 0; fireSource = 'spot'; foundHold = 0;
       }
     } else {
       stateT += dt;
@@ -801,6 +925,12 @@ async function main() {
 
     // --- only visible while moving ------------------------------------------
     const heldTarget = orb.latest && orb.latest.held > 0.5 ? 1 : 0;
+    // Setting the orb down ends the session, and the hole forgets it was ever
+    // caught: it is playing fair again for whoever picks it up next. Read off
+    // `held` rather than the re-levelling epoch, because the transition now
+    // re-levels too and that must not count as a new session.
+    if (wasHeld && !heldTarget) goalWins = 0;
+    wasHeld = !!heldTarget;
     heldAmt += (heldTarget - heldAmt) * (1 - Math.exp(-dt * 6));
 
     const moveTarget = smooth01(ramp(liveTurn, pVisMin.value, pVisFull.value));
@@ -823,12 +953,15 @@ async function main() {
     goalVis = 1 + (goalActive - 1) * heldAmt;
 
     // --- uniforms -----------------------------------------------------------
-    lookup.copy(smoothed).invert().multiply(m.field);
+    lookup.copy(smoothed).invert().premultiply(fieldCInv);
     lookupMat.setFromMatrix4(lookupM4.makeRotationFromQuaternion(lookup));
     uField.value.copy(lookupMat);
-    uAxis.value.copy(axis).applyMatrix3(lookupMat);
-    uU.value.copy(basisU).applyMatrix3(lookupMat);
-    uW.value.copy(basisW).applyMatrix3(lookupMat);
+    // The spin axis and its basis come off the gyro, so they are already in
+    // body coordinates; a body direction b sits at field coordinate C^-1 b.
+    // Putting them through L instead would apply the attitude a second time.
+    uAxis.value.copy(axis).applyQuaternion(fieldCInv);
+    uU.value.copy(basisU).applyQuaternion(fieldCInv);
+    uW.value.copy(basisW).applyQuaternion(fieldCInv);
     uPhase.value = phase;
     uRipple.value = pRipples.value ? ripple : 0;
     uSpin.value = spin;
@@ -870,13 +1003,19 @@ async function main() {
     // --- the motor, arguing -------------------------------------------------
     if (pHaptics.value) {
       if (phaseState !== 'idle') {
-        // Reaching the collapsing point is the eye's win, not the hand's. Two
-        // flat refusals -- no, no -- and then silence, rather than a reward.
-        const since = stateT + (phaseState === 'out' ? pInSecs.value : 0);
-        const len = pNoLen.value;
-        const gap = pNoGap.value;
-        const knocking = since < len || (since >= len + gap && since < len * 2 + gap);
-        motorLevel = knocking ? pNoStrength.value : 0;
+        if (fireSource === 'spot') {
+          // The hand's own errand, so this one is met with a swell that rises
+          // and falls with the collapse rather than a refusal.
+          motorLevel = pYesStrength.value * Math.sqrt(Math.max(collapse, 0));
+        } else {
+          // Reaching the collapsing point is the eye's win, not the hand's.
+          // Two flat refusals -- no, no -- and then silence.
+          const since = stateT + (phaseState === 'out' ? pInSecs.value : 0);
+          const len = pNoLen.value;
+          const gap = pNoGap.value;
+          const knocking = since < len || (since >= len + gap && since < len * 2 + gap);
+          motorLevel = knocking ? pNoStrength.value : 0;
+        }
       } else {
         // Warmer is faster and harder, full stop. Nothing on screen says where
         // the spot is, so the gradient itself has to carry the whole message.

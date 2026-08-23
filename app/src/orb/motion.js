@@ -48,6 +48,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
   const homeInv = new Quaternion();
   const field = new Quaternion();
   const scratch = new Quaternion();
+  const here = new Quaternion();
   let levelled = false;
   let wasHeld = false;
   let epoch = 0;
@@ -131,6 +132,28 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     state,
     get delayMs() { return delayMs; },
     set delayMs(v) { delayMs = v; },
+
+    /**
+     * Make the pose the orb is in right now the new neutral, without waiting
+     * for it to be set down -- for moments an experiment declares to be a
+     * fresh start while the orb is still in the hand.
+     *
+     * It levels against the pose at the *render clock*, not the newest sample.
+     * Those are `delayMs` apart, and what has to become level is the pose the
+     * participant is looking at and holding, not the one the buffer has run on
+     * to. `state.quaternion` is `home^-1 * raw`, so `home * state.quaternion`
+     * recovers exactly that raw pose.
+     *
+     * Bumps `epoch` like any other re-levelling, so a caller that already
+     * handles the set-down case needs no new branch.
+     *
+     * @returns false if there is nothing to level against yet.
+     */
+    relevelHere() {
+      if (!levelled || !state.valid) return false;
+      relevel(here.copy(home).multiply(state.quaternion));
+      return true;
+    },
 
     sample() {
       if (count === 0 || offset === null) {

@@ -1,4 +1,4 @@
-import { Matrix3, Matrix4, Quaternion, Vector3 } from 'three/webgpu';
+import { Quaternion, Vector3 } from 'three/webgpu';
 import { sensorQuaternion, angularVelocity, linearAccel } from './frame.js';
 
 // Smooth motion from a bursty link.
@@ -20,12 +20,17 @@ import { sensorQuaternion, angularVelocity, linearAccel } from './frame.js';
 // reported *relative* to that, which is what makes it right when it is next
 // picked up.
 //
-// Re-levelling would normally make the picture jump, because the surface
-// features are fixed to the body and the body has just been redefined. It does
-// not, because `field` counter-rotates by exactly the amount the body moved:
-// an experiment that looks its noise up through `field` sees an identical
-// image across the change. That is the whole reason it is safe to do this
-// silently while the orb is sitting on the table.
+// Re-levelling must be invisible, and the only way to guarantee that is for
+// nothing on screen to be a function of the attitude directly. So no object
+// rotates. Instead everything is looked up through
+//
+//     L = attitude^-1 * field
+//
+// and `field` is updated at each re-level so that L comes out identical. If
+// every visible quantity is a function of L alone, nothing can move -- which
+// is not true if the object itself is rotated as well. A point cloud makes
+// that painfully obvious: rotating it snaps every point to a new position on
+// screen no matter how carefully the noise is compensated.
 
 const CAPACITY = 180;          // ~1.8 s at 100 Hz
 
@@ -82,7 +87,7 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     else offset += (observed - offset) * 0.001;
   });
 
-  // displayed = home^-1 * raw.
+  // attitude = home^-1 * raw.
   //
   // The side matters and is not a matter of taste. Post-multiplying instead
   // (raw * home^-1) expresses the attitude in the world frame rather than the
@@ -93,27 +98,25 @@ export function createMotion(orb, { delayMs = 70 } = {}) {
     if (levelled) {
       // What the body is showing right now becomes what the field has to undo,
       // so the image is unchanged across the switch.
-      scratch.copy(raw).premultiply(homeInv);        // displayed, before
-      field.multiply(scratch.invert());
+      // L = A^-1 * F must not change, so F picks up the old attitude:
+      //   F <- A_old^-1 * F
+      scratch.copy(raw).premultiply(homeInv);        // attitude, before
+      field.premultiply(scratch.invert());
     }
     home.copy(raw);
     homeInv.copy(home).invert();
     epoch++;
-    fieldMatrix.setFromMatrix4(m4.makeRotationFromQuaternion(field));
     levelled = true;
   }
 
-  const m4 = new Matrix4();
-  const fieldMatrix = new Matrix3();
 
   const state = {
     quaternion: new Quaternion(),
     omega: new Vector3(),
     accel: new Vector3(),
-    /** Rotate object-space directions by this before looking up any field that
-     *  should stay put across a re-levelling. */
+    /** Combine as `attitude^-1 * field` to get the rotation every field lookup
+     *  should go through. Nothing should be rotated by the attitude directly. */
     field,
-    fieldMatrix,
     /** Bumped on every re-levelling. Anything easing towards the attitude must
      *  snap on the frame this changes: the field compensation is instantaneous,
      *  so a follower that eases instead would drag the body across a picture

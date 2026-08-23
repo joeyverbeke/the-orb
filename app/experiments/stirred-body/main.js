@@ -280,6 +280,12 @@ async function main() {
   const response = createResponse();
 
   const smoothed = new THREE.Quaternion();
+  // Everything visible is a function of this one rotation, and nothing is
+  // rotated by the attitude directly -- that is what makes a re-level
+  // invisible. See src/orb/motion.js.
+  const lookup = new THREE.Quaternion();
+  const lookupMat = new THREE.Matrix3();
+  const lookupM4 = new THREE.Matrix4();
   const axis = new THREE.Vector3(0, 1, 0);
   const nextAxis = new THREE.Vector3();
   const basisU = new THREE.Vector3(1, 0, 0);
@@ -356,17 +362,21 @@ async function main() {
     // Crests keep moving once started, mostly driven by how hard it is turning.
     phase += (0.25 + spin * pRipSpeed.value) * dt;
 
-    mesh.quaternion.copy(smoothed);
     marker.visible = pMarker.value;
     cage.visible = pCage.value;
 
-    uField.value.copy(m.fieldMatrix);
+    // L = attitude^-1 * field
+    lookup.copy(smoothed).invert().multiply(m.field);
+    lookupMat.setFromMatrix4(lookupM4.makeRotationFromQuaternion(lookup));
+    uField.value.copy(lookupMat);
+    // Glued to the pattern, not to the attitude.
+    marker.quaternion.copy(lookup).invert();
     // The spin axis and its basis live in body space, but the field is now
     // looked up through `field` -- so they have to be carried into the same
     // space or the ripple bands drift off the axis they belong to.
-    uAxis.value.copy(axis).applyMatrix3(m.fieldMatrix);
-    uU.value.copy(basisU).applyMatrix3(m.fieldMatrix);
-    uW.value.copy(basisW).applyMatrix3(m.fieldMatrix);
+    uAxis.value.copy(axis).applyMatrix3(lookupMat);
+    uU.value.copy(basisU).applyMatrix3(lookupMat);
+    uW.value.copy(basisW).applyMatrix3(lookupMat);
     uUndDepth.value = pUndRest.value + (pUndMoving.value - pUndRest.value) * stirred;
     uPhase.value = phase;
     uRipple.value = pRipples.value ? ripple : 0;

@@ -261,6 +261,12 @@ async function main() {
   // --- device ---------------------------------------------------------------
   const motion = createMotion(orb, { delayMs: 70 });
   const smoothed = new THREE.Quaternion();
+  // Everything visible is a function of this one rotation, and nothing is
+  // rotated by the attitude directly -- that is what makes a re-level
+  // invisible. See src/orb/motion.js.
+  const lookup = new THREE.Quaternion();
+  const lookupMat = new THREE.Matrix3();
+  const lookupM4 = new THREE.Matrix4();
   let liveTurn = 0, started = false, lastGraph = 0, lastEpoch = -1;
 
   stage.onUpdate((dt) => {
@@ -285,8 +291,10 @@ async function main() {
     const felt = response.haptic;
     if (felt === null) orb.releaseHaptic(); else orb.setHaptic(felt);
 
-    cloud.quaternion.copy(smoothed);
-    uField.value.copy(m.fieldMatrix);
+    // L = attitude^-1 * field
+    lookup.copy(smoothed).invert().multiply(m.field);
+    lookupMat.setFromMatrix4(lookupM4.makeRotationFromQuaternion(lookup));
+    uField.value.copy(lookupMat);
     uLevel.value = level;
     uUndDepth.value = L.undRest + (L.undMoving - L.undRest) * level;
     uDrift.value = L.driftRest + (L.driftMoving - L.driftRest) * level;

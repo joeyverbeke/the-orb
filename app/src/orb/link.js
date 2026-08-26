@@ -10,9 +10,19 @@ const DEFAULT_URL = `ws://${location.hostname || 'localhost'}:8765`;
 // config dumps. 'v' sets the same value silently -- see console.cpp.
 const HAPTIC_CMD = 'v';
 
+// Same reasoning for the voice: 'A' and 'U' are excluded from the firmware's
+// echo list, so driving them off state changes does not dump config blocks.
+const VOICE_CMD = 'A';
+const VOICE_GAIN_CMD = 'U';
+
 // No point sending faster than the motor can respond; the ERM's own spin-up is
 // 40-60 ms.
 const HAPTIC_MIN_INTERVAL_MS = 16;
+
+// The director has its own cooldown; this is the belt to that pair of braces.
+// One mis-fired edge detection would otherwise send 'A n' at frame rate, and
+// every one of those restarts the clip from the top.
+const VOICE_MIN_INTERVAL_MS = 120;
 
 export class OrbLink {
   constructor(url = DEFAULT_URL) {
@@ -30,6 +40,7 @@ export class OrbLink {
     this._statusCbs = new Set();
 
     this._haptic = { owned: false, last: -1, sentAt: 0 };
+    this._voice = { sentAt: 0, clip: -1 };
     this._retry = null;
 
     // Best effort only. Measured on this setup: navigating away does NOT get
@@ -37,14 +48,14 @@ export class OrbLink {
     // ever written. The device is the real safety net; it times a host-driven
     // hold out by itself after HOLD_TIMEOUT_MS (console.cpp). Keep both, but
     // do not rely on this one.
-    addEventListener('pagehide', () => this.releaseHaptic());
+    addEventListener('pagehide', () => { this.releaseHaptic(); this.hush(); });
 
     // A page you cannot see must not be driving the thing in your hand.
     // Several experiment tabs left open otherwise all write the motor at once
     // and the last one to speak wins, which reads as the haptics being broken
     // rather than as a tab fighting you from behind another window.
     addEventListener('visibilitychange', () => {
-      if (document.hidden) this.releaseHaptic();
+      if (document.hidden) { this.releaseHaptic(); this.hush(); }
     });
   }
 
@@ -153,6 +164,42 @@ export class OrbLink {
   }
 
   get ownsHaptic() { return this._haptic.owned; }
+
+  // --- the voice ----------------------------------------------------------
+  //
+  // Unlike the haptic hold there is no device-side timeout, deliberately. The
+  // hold needs one because the host drives it continuously and a dead host
+  // leaves the motor pinned; audio is one-shot and the firmware plays to EOF
+  // and stops itself, so the worst a closed tab can do is let one line finish.
+  // `hush` is best effort only -- the pagehide note above applies here too,
+  // and nothing may depend on it arriving.
+
+  /** Play clip `id` from clips.json. Preempts whatever is sounding. */
+  say(id) {
+    if (document.hidden) return false;
+    const now = performance.now();
+    if (now - this._voice.sentAt < VOICE_MIN_INTERVAL_MS) return false;
+    this._voice.sentAt = now;
+    this._voice.clip = id;
+    this.send(`${VOICE_CMD} ${id | 0}`);
+    return true;
+  }
+
+  hush() {
+    if (this._voice.clip < 0) return;
+    this._voice.clip = -1;
+    this.send(`${VOICE_CMD} -1`);
+  }
+
+  setVolume(v) {
+    this.send(`${VOICE_GAIN_CMD} ${Math.max(0, Math.min(1, v)).toFixed(3)}`);
+  }
+
+  /** Clip the firmware says is sounding right now, -1 for none. */
+  get voiceClip() {
+    const c = this.config?.voice_clip;
+    return c === undefined ? -1 : Number(c);
+  }
 
   // --- mode control, for pages that want it -------------------------------
 

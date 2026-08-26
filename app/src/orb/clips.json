@@ -1,0 +1,432 @@
+{
+  "clips": {
+    "arrive_dont_move": {
+      "bank": "arrive",
+      "id": 50,
+      "key": "any",
+      "ms": 1297,
+      "text": "Don't move. Hold it."
+    },
+    "arrive_hold_hold": {
+      "bank": "arrive",
+      "id": 52,
+      "key": "any",
+      "ms": 1528,
+      "text": "Hold, hold, hold."
+    },
+    "arrive_hold_there": {
+      "bank": "arrive",
+      "id": 47,
+      "key": "any",
+      "ms": 731,
+      "text": "Hold it there!"
+    },
+    "arrive_stay": {
+      "bank": "arrive",
+      "id": 51,
+      "key": "any",
+      "ms": 838,
+      "text": "Stay right there."
+    },
+    "arrive_there_hold": {
+      "bank": "arrive",
+      "id": 49,
+      "key": "any",
+      "ms": 1022,
+      "text": "There! Hold it."
+    },
+    "arrive_yes_there": {
+      "bank": "arrive",
+      "id": 48,
+      "key": "any",
+      "ms": 1642,
+      "text": "Yes -- there. Hold it."
+    },
+    "cont_away": {
+      "bank": "cont",
+      "id": 14,
+      "key": "bottom_limb",
+      "ms": 1062,
+      "text": "Keep tipping away."
+    },
+    "cont_away_terse": {
+      "bank": "cont",
+      "id": 15,
+      "key": "bottom_limb",
+      "ms": 472,
+      "text": "Away."
+    },
+    "cont_keep": {
+      "bank": "cont",
+      "id": 17,
+      "key": "any",
+      "ms": 674,
+      "text": "Keep going."
+    },
+    "cont_left": {
+      "bank": "cont",
+      "id": 8,
+      "key": "right_limb",
+      "ms": 913,
+      "text": "Keep going left."
+    },
+    "cont_left_terse": {
+      "bank": "cont",
+      "id": 9,
+      "key": "right_limb",
+      "ms": 341,
+      "text": "Left."
+    },
+    "cont_more": {
+      "bank": "cont",
+      "id": 16,
+      "key": "any",
+      "ms": 364,
+      "text": "More."
+    },
+    "cont_right": {
+      "bank": "cont",
+      "id": 10,
+      "key": "left_limb",
+      "ms": 936,
+      "text": "Keep going right."
+    },
+    "cont_right_terse": {
+      "bank": "cont",
+      "id": 11,
+      "key": "left_limb",
+      "ms": 366,
+      "text": "Right."
+    },
+    "cont_thats_it": {
+      "bank": "cont",
+      "id": 18,
+      "key": "any",
+      "ms": 1381,
+      "text": "That's it, keep going."
+    },
+    "cont_toward": {
+      "bank": "cont",
+      "id": 12,
+      "key": "top_limb",
+      "ms": 1246,
+      "text": "Keep tipping toward you."
+    },
+    "cont_toward_terse": {
+      "bank": "cont",
+      "id": 13,
+      "key": "top_limb",
+      "ms": 622,
+      "text": "Toward you."
+    },
+    "dira_away": {
+      "bank": "dir_a",
+      "id": 3,
+      "key": "bottom_limb",
+      "ms": 1095,
+      "text": "Tip it away from you."
+    },
+    "dira_left": {
+      "bank": "dir_a",
+      "id": 0,
+      "key": "right_limb",
+      "ms": 912,
+      "text": "Rotate it left."
+    },
+    "dira_right": {
+      "bank": "dir_a",
+      "id": 1,
+      "key": "left_limb",
+      "ms": 916,
+      "text": "Rotate it right."
+    },
+    "dira_toward": {
+      "bank": "dir_a",
+      "id": 2,
+      "key": "top_limb",
+      "ms": 982,
+      "text": "Tip it toward you."
+    },
+    "dirb_bottom": {
+      "bank": "dir_b",
+      "id": 7,
+      "key": "bottom_limb",
+      "ms": 1551,
+      "text": "Bring the bottom round toward you."
+    },
+    "dirb_left": {
+      "bank": "dir_b",
+      "id": 5,
+      "key": "left_limb",
+      "ms": 1761,
+      "text": "Bring the left side round toward you."
+    },
+    "dirb_right": {
+      "bank": "dir_b",
+      "id": 4,
+      "key": "right_limb",
+      "ms": 1786,
+      "text": "Bring the right side round toward you."
+    },
+    "dirb_top": {
+      "bank": "dir_b",
+      "id": 6,
+      "key": "top_limb",
+      "ms": 1526,
+      "text": "Bring the top round toward you."
+    },
+    "dist_almost": {
+      "bank": "dist",
+      "id": 25,
+      "key": "near",
+      "ms": 798,
+      "text": "Almost there."
+    },
+    "dist_back": {
+      "bank": "dist",
+      "id": 21,
+      "key": "far",
+      "ms": 1070,
+      "text": "Still round the back."
+    },
+    "dist_closer": {
+      "bank": "dist",
+      "id": 23,
+      "key": "mid",
+      "ms": 735,
+      "text": "You're closer."
+    },
+    "dist_little_more": {
+      "bank": "dist",
+      "id": 26,
+      "key": "near",
+      "ms": 1028,
+      "text": "Just a little more."
+    },
+    "dist_long_way": {
+      "bank": "dist",
+      "id": 19,
+      "key": "far",
+      "ms": 1088,
+      "text": "It's a long way round."
+    },
+    "dist_not_close": {
+      "bank": "dist",
+      "id": 20,
+      "key": "far",
+      "ms": 905,
+      "text": "You're not close."
+    },
+    "dist_touch": {
+      "bank": "dist",
+      "id": 27,
+      "key": "near",
+      "ms": 767,
+      "text": "A touch more."
+    },
+    "dist_very_close": {
+      "bank": "dist",
+      "id": 24,
+      "key": "near",
+      "ms": 1093,
+      "text": "Very close now."
+    },
+    "dist_warmer": {
+      "bank": "dist",
+      "id": 22,
+      "key": "mid",
+      "ms": 740,
+      "text": "Getting warmer."
+    },
+    "fast_easy": {
+      "bank": "fast",
+      "id": 41,
+      "key": "any",
+      "ms": 1578,
+      "text": "Easy. Nice and slow."
+    },
+    "fast_rushing": {
+      "bank": "fast",
+      "id": 42,
+      "key": "any",
+      "ms": 663,
+      "text": "You're rushing."
+    },
+    "fast_slow_down": {
+      "bank": "fast",
+      "id": 39,
+      "key": "any",
+      "ms": 698,
+      "text": "Slow down."
+    },
+    "fast_slower": {
+      "bank": "fast",
+      "id": 40,
+      "key": "any",
+      "ms": 468,
+      "text": "Slower."
+    },
+    "fast_too_fast": {
+      "bank": "fast",
+      "id": 38,
+      "key": "any",
+      "ms": 719,
+      "text": "Too fast."
+    },
+    "idle_keep_looking": {
+      "bank": "idle",
+      "id": 60,
+      "key": "any",
+      "ms": 706,
+      "text": "Keep looking."
+    },
+    "idle_still_here": {
+      "bank": "idle",
+      "id": 59,
+      "key": "any",
+      "ms": 631,
+      "text": "Still here."
+    },
+    "lost_had_it": {
+      "bank": "lost",
+      "id": 54,
+      "key": "any",
+      "ms": 1080,
+      "text": "Back -- you had it."
+    },
+    "lost_lost_it": {
+      "bank": "lost",
+      "id": 53,
+      "key": "any",
+      "ms": 660,
+      "text": "You lost it."
+    },
+    "over_back_other": {
+      "bank": "over",
+      "id": 31,
+      "key": "any",
+      "ms": 981,
+      "text": "Back the other way."
+    },
+    "over_come_back": {
+      "bank": "over",
+      "id": 32,
+      "key": "any",
+      "ms": 915,
+      "text": "Come back a little."
+    },
+    "over_had_it": {
+      "bank": "over",
+      "id": 33,
+      "key": "any",
+      "ms": 522,
+      "text": "You had it."
+    },
+    "over_missed": {
+      "bank": "over",
+      "id": 30,
+      "key": "any",
+      "ms": 740,
+      "text": "Just missed it."
+    },
+    "over_past": {
+      "bank": "over",
+      "id": 29,
+      "key": "any",
+      "ms": 921,
+      "text": "You went past it."
+    },
+    "over_too_far": {
+      "bank": "over",
+      "id": 28,
+      "key": "any",
+      "ms": 576,
+      "text": "Too far."
+    },
+    "stall_dont_stop": {
+      "bank": "stall",
+      "id": 44,
+      "key": "any",
+      "ms": 637,
+      "text": "Don't stop."
+    },
+    "stall_keep_moving": {
+      "bank": "stall",
+      "id": 46,
+      "key": "any",
+      "ms": 716,
+      "text": "Keep moving."
+    },
+    "stall_keep_turning": {
+      "bank": "stall",
+      "id": 43,
+      "key": "any",
+      "ms": 697,
+      "text": "Keep turning."
+    },
+    "stall_stopped": {
+      "bank": "stall",
+      "id": 45,
+      "key": "any",
+      "ms": 686,
+      "text": "You've stopped."
+    },
+    "win_found_it": {
+      "bank": "win",
+      "id": 57,
+      "key": "any",
+      "ms": 474,
+      "text": "Found it."
+    },
+    "win_got_it": {
+      "bank": "win",
+      "id": 56,
+      "key": "any",
+      "ms": 413,
+      "text": "Got it."
+    },
+    "win_thats_it": {
+      "bank": "win",
+      "id": 55,
+      "key": "any",
+      "ms": 403,
+      "text": "That's it."
+    },
+    "win_well_done": {
+      "bank": "win",
+      "id": 58,
+      "key": "any",
+      "ms": 639,
+      "text": "Well done."
+    },
+    "wrong_no_other": {
+      "bank": "wrong",
+      "id": 36,
+      "key": "any",
+      "ms": 1200,
+      "text": "No, other way."
+    },
+    "wrong_not_that": {
+      "bank": "wrong",
+      "id": 37,
+      "key": "any",
+      "ms": 819,
+      "text": "Not that way."
+    },
+    "wrong_other": {
+      "bank": "wrong",
+      "id": 35,
+      "key": "any",
+      "ms": 618,
+      "text": "Other way."
+    },
+    "wrong_way": {
+      "bank": "wrong",
+      "id": 34,
+      "key": "any",
+      "ms": 630,
+      "text": "Wrong way."
+    }
+  },
+  "rate": 16000
+}

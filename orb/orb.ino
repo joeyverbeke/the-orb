@@ -20,6 +20,7 @@
 #include "presence.h"
 #include "telemetry.h"
 #include "texture.h"
+#include "voice.h"
 
 Config cfg;
 
@@ -44,6 +45,13 @@ void setup() {
   Serial.println(imu_ok ? F("# BNO085 ok, 4 reports at 100 Hz")
                         : F("# BNO085 NOT FOUND -- check Wire on D4/D5"));
 
+  bool voice_ok = voice_begin();
+  Serial.println(voice_ok ? F("# MAX98357A ok, I2S up on D10/D9/D8")
+                          : F("# I2S NOT STARTED -- voice is silent"));
+  if (voice_ok && !voice_fs()) {
+    Serial.println(F("# no LittleFS -- flash the clip image, see tools/voice_build.py"));
+  }
+
   modes_reset();
   texture_reset();
   presence_begin();
@@ -53,6 +61,7 @@ void setup() {
 void loop() {
   console_tick();
   haptic_tick();          // steps a running sweep; idle-stops a stale motor
+  voice_tick();           // reports clip start/end; the audio itself is on core 0
 
   if (!imu_ok) return;
 

@@ -3,6 +3,7 @@
 #include "haptic.h"
 #include "modes.h"
 #include "telemetry.h"
+#include "voice.h"
 
 #include <Arduino.h>
 #include <stdlib.h>
@@ -40,6 +41,8 @@ void console_help() {
   Serial.println(F("#   v <0..1>   as H, but no settings echo (host-driven)"));
   Serial.println(F("#   k <0|1>    silence the motor when set down"));
   Serial.println(F("#   h <0|1>    haptics    m  motor sweep    z  stop"));
+  Serial.println(F("#   A <n>      play voice clip n (-1 stops), no settings echo"));
+  Serial.println(F("#   U <0..1>   voice volume, no settings echo"));
   Serial.println(F("#   c <0|1>    CSV stream    p  print settings    ?  this"));
 }
 
@@ -118,6 +121,15 @@ static void handle(char *s) {
       hold_live    = (cfg.hold >= 0.0f);
       hold_live_ms = millis();
       break;
+    // Also absent from the echo list, and for the same reason as 'v' -- the
+    // host fires these off state changes, not off a slider drag.
+    //
+    // 'U' rather than the obvious 'V': parsing here is case-sensitive, and 'v'
+    // is the frame-rate haptic hold. One missed shift key in a serial monitor
+    // would put the motor to full instead of turning the volume down.
+    case 'A': voice_play((int)v);   break;
+    case 'U': voice_set_gain(v);    break;
+
     case 'n': cfg.presence_still_deg  = clampf(v, 0.1f, 20.0f);      break;
     case 'o': cfg.presence_putdown_ms = clampf(v, 100.0f, 10000.0f); break;
 

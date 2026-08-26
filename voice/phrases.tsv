@@ -1,0 +1,74 @@
+# The voice's whole vocabulary. One row per clip.
+#
+# id is explicit and MUST NEVER be renumbered: it is the number the
+# firmware plays ('A <id>') and the name of the file on the device
+# (/v/NN.raw). Adding a clip means appending a new id, never inserting.
+#
+# slug is the basename of the TTS wav in voice/wav/, so rendering the set
+# is: for each row, speak `text` into voice/wav/{slug}.wav.
+#
+# bank + key are what app/experiments/counterpull/voice.js selects on.
+# Several rows may share a (bank, key); the director picks among them at
+# random so the same situation does not always produce the same sentence.
+id	slug	bank	key	text
+0	dira_left	dir_a	right_limb	Rotate it left.
+1	dira_right	dir_a	left_limb	Rotate it right.
+2	dira_toward	dir_a	top_limb	Tip it toward you.
+3	dira_away	dir_a	bottom_limb	Tip it away from you.
+4	dirb_right	dir_b	right_limb	Bring the right side round toward you.
+5	dirb_left	dir_b	left_limb	Bring the left side round toward you.
+6	dirb_top	dir_b	top_limb	Bring the top round toward you.
+7	dirb_bottom	dir_b	bottom_limb	Bring the bottom round toward you.
+8	cont_left	cont	right_limb	Keep going left.
+9	cont_left_terse	cont	right_limb	Left.
+10	cont_right	cont	left_limb	Keep going right.
+11	cont_right_terse	cont	left_limb	Right.
+12	cont_toward	cont	top_limb	Keep tipping toward you.
+13	cont_toward_terse	cont	top_limb	Toward you.
+14	cont_away	cont	bottom_limb	Keep tipping away.
+15	cont_away_terse	cont	bottom_limb	Away.
+16	cont_more	cont	any	More.
+17	cont_keep	cont	any	Keep going.
+18	cont_thats_it	cont	any	That's it, keep going.
+19	dist_long_way	dist	far	It's a long way round.
+20	dist_not_close	dist	far	You're not close.
+21	dist_back	dist	far	Still round the back.
+22	dist_warmer	dist	mid	Getting warmer.
+23	dist_closer	dist	mid	You're closer.
+24	dist_very_close	dist	near	Very close now.
+25	dist_almost	dist	near	Almost there.
+26	dist_little_more	dist	near	Just a little more.
+27	dist_touch	dist	near	A touch more.
+28	over_too_far	over	any	Too far.
+29	over_past	over	any	You went past it.
+30	over_missed	over	any	Just missed it.
+31	over_back_other	over	any	Back the other way.
+32	over_come_back	over	any	Come back a little.
+33	over_had_it	over	any	You had it.
+34	wrong_way	wrong	any	Wrong way.
+35	wrong_other	wrong	any	Other way.
+36	wrong_no_other	wrong	any	No, other way.
+37	wrong_not_that	wrong	any	Not that way.
+38	fast_too_fast	fast	any	Too fast.
+39	fast_slow_down	fast	any	Slow down.
+40	fast_slower	fast	any	Slower.
+41	fast_easy	fast	any	Easy. Nice and slow.
+42	fast_rushing	fast	any	You're rushing.
+43	stall_keep_turning	stall	any	Keep turning.
+44	stall_dont_stop	stall	any	Don't stop.
+45	stall_stopped	stall	any	You've stopped.
+46	stall_keep_moving	stall	any	Keep moving.
+47	arrive_hold_there	arrive	any	Hold it there!
+48	arrive_yes_there	arrive	any	Yes -- there. Hold it.
+49	arrive_there_hold	arrive	any	There! Hold it.
+50	arrive_dont_move	arrive	any	Don't move. Hold it.
+51	arrive_stay	arrive	any	Stay right there.
+52	arrive_hold_hold	arrive	any	Hold, hold, hold.
+53	lost_lost_it	lost	any	You lost it.
+54	lost_had_it	lost	any	Back -- you had it.
+55	win_thats_it	win	any	That's it.
+56	win_got_it	win	any	Got it.
+57	win_found_it	win	any	Found it.
+58	win_well_done	win	any	Well done.
+59	idle_still_here	idle	any	Still here.
+60	idle_keep_looking	idle	any	Keep looking.

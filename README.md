@@ -269,6 +269,13 @@ window. A page that goes hidden releases its hold. Two windows visible side by
 side will still contend; `ORB_DEBUG=1 tools/.venv/bin/python tools/bridge.py`
 logs every command written to the device, which is how to spot it.
 
+**The voice follows the same rule**, and it is much easier to misread: a
+backgrounded tab is silent, and silence from a speaker looks exactly like a
+speaker that does not work. The tuning panel's **voice gate** readout says
+which of the six gates is holding a line back, and names this one in capitals.
+Put the counterpull tab in the foreground of its window — being in another
+*application* is fine, being behind another *tab* is not.
+
 
 ---
 
@@ -293,6 +300,7 @@ moved      much         character      motor
 | [presence.cpp](orb/presence.cpp) | is it in a hand? silences the motor when not |
 | [texture.cpp](orb/texture.cpp) | pulse + grain, applied to every mode |
 | [haptic.cpp](orb/haptic.cpp) | DRV2605L realtime, ERM floor, sweep |
+| [voice.cpp](orb/voice.cpp) | MAX98357A over I2S, clips off LittleFS, on its own core |
 | [telemetry.cpp](orb/telemetry.cpp) | CSV out + loop rate |
 | [console.cpp](orb/console.cpp) | terse command protocol |
 
@@ -302,6 +310,41 @@ and [record.py](tools/record.py) / [plot.py](tools/plot.py) for offline capture.
 
 The firmware speaks compact CSV and one-letter commands; the bridge does all
 the JSON and naming, so the ESP32 never spends cycles on presentation.
+
+The one thing that is not on the main loop is the voice. `loop()` already
+blocks — USB CDC has a 100 ms tx timeout and a CSV row is ~24 separate writes —
+and the I2S buffer is only 90 ms deep at 16 kHz, so audio fed from `loop()`
+stutters whenever the host hiccups. `voice.cpp` runs a task pinned to core 0
+instead; `loop()` only hands it a clip number and prints when one starts and
+ends. Measured cost to the loop rate: none, 100.1 Hz with a clip sounding.
+
+## The voice
+
+`voice/phrases.tsv` is the whole vocabulary — one row per clip, with an
+explicit `id` that is both the number the firmware plays (`A <id>`) and the
+file it opens (`/v/NN.raw`). **Ids are never renumbered**: append, never
+insert, or a flashed orb and a fresh app disagree about what every line means.
+
+```bash
+python3 tools/voice_build.py all                     # tts -> raws -> image
+python3 tools/voice_build.py flash --port /dev/cu.usbmodemXXXX
+```
+
+`build` is the only required step: point `voice/wav/{slug}.wav` at whatever TTS
+engine you like and skip `tts`, which exists so the chain is testable with the
+macOS `say` voice before the real one is recorded. It writes
+`app/src/orb/clips.json`, which the experiment imports, so the app and the
+device are generated from one file and cannot drift apart in naming — only in
+*version*, which is what `manifest.txt` inside the image is for.
+
+Which way it tells you to turn is derived, not tabulated by hand, and the
+derivation is written out in [voice.js](app/experiments/counterpull/voice.js).
+The short summary: the rule is symmetric — *the limb nearest the target comes
+toward you* — but the English is not, because the vertical has a natural verb
+framed on the top ("tip it toward you") and the horizontal borrows front-face
+framing, which inverts. Hence target-on-the-right → "rotate it left". The panel
+carries flip toggles and a second, unambiguous phrasing set because which way a
+listener *hears* "left" is a question about people, not geometry.
 
 ## Modes
 

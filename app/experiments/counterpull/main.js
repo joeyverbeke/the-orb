@@ -14,8 +14,10 @@ import { orb } from '../../src/orb/link.js';
 import { createMotion } from '../../src/orb/motion.js';
 import { createResponse } from '../../src/orb/response.js';
 import { buildCloud } from './cloud.js';
+import { createVoice, decompose } from './voice.js';
+import clipsJson from '../../src/orb/clips.json';
 
-// Two instructions at once, and they do not agree.
+// Three instructions at once, and they do not agree.
 //
 // Forked from the data body, so the cloud, the undulation and the ripples are
 // the same machinery. Three things are added on top, and each one is a lever
@@ -35,6 +37,13 @@ import { buildCloud } from './cloud.js';
 //     and the strength of the pulse fall away the faster the point is being
 //     brought toward centre. Turn where the eye wants and the hand goes quiet;
 //     turn anywhere else and it insists.
+//
+//   * And a voice names a third place outright. The other two are gradients,
+//     and a gradient can be shut out by holding still; speech arrives whether
+//     or not you are moving, tells you which way to turn in words, and then
+//     comments on what you did with it. Its errand is unmarked -- nothing on
+//     screen, nothing in the hand -- so the words are the whole of it. See
+//     voice.js for the sign convention, which is the part worth checking.
 //
 // The goal direction is carried in *body* coordinates and pushed through the
 // attitude each frame (`goalScreen = attitude * goalBody`), rather than through
@@ -367,6 +376,54 @@ async function main() {
   const pNoGap = panel.slider('Refusal gap (s)', {
     key: 'hap-no-gap', value: 0.14, min: 0.02, max: 0.5, step: 0.01 });
 
+  // --- the voice, arguing too -----------------------------------------------
+  panel.group('Voice');
+  const pVoice = panel.toggle('Speak', true, { key: 'voice-on' });
+  const pVoiceVol = panel.slider('Volume', {
+    key: 'voice-vol', value: 0.6, min: 0, max: 1, step: 0.01,
+    note: 'The amp is hardwired at +12 dB, so this is the only volume control '
+        + 'there is. Start it low: a loud syllable and a motor pulse land at '
+        + 'the same moment, off the same event, on the same 3V3 rail.' });
+  const pVoiceSetB = panel.toggle('Unambiguous phrasing', false, {
+    key: 'voice-set-b',
+    note: 'Off: "Rotate it left." On: "Bring the right side round toward you." '
+        + 'The same rotation both times. The short form is ambiguous to a '
+        + 'person holding a ball — it does not say whether the near face or '
+        + 'the far face goes left — and this is the switch that settles which '
+        + 'one people actually act on.' });
+  const pVoiceFlipLR = panel.toggle('Swap left and right', false, {
+    key: 'voice-flip-lr',
+    note: 'The geometry is derived, not guessed (see voice.js), but which way '
+        + 'a listener *hears* "left" is not something a derivation can settle. '
+        + 'If people reliably turn the wrong way, this is a five-second fix '
+        + 'rather than a re-render of the clips.' });
+  const pVoiceFlipTA = panel.toggle('Swap toward and away', false, {
+    key: 'voice-flip-ta' });
+  const pVoiceSep = panel.slider('Keep clear of the other two (deg)', {
+    key: 'voice-sep', value: 70, min: 20, max: 170, step: 5,
+    note: 'Three errands on one sphere. Too close and the three pulls stop '
+        + 'being distinguishable, which is the whole experiment.' });
+  const pVoiceFound = panel.slider('Counts as found within (deg)', {
+    key: 'voice-found', value: 16, min: 4, max: 60, step: 1 });
+  const pVoiceFire = panel.slider('Hold it there to fire (s)', {
+    key: 'voice-fire', value: 2.2, min: 0.5, max: 8, step: 0.1,
+    note: 'The third route through. The voice says hold it, goes quiet, and '
+        + 'this is how long the quiet has to last.' });
+  const pVoiceGap = panel.slider('Silence between lines (s)', {
+    key: 'voice-gap', value: 0.7, min: 0, max: 4, step: 0.1,
+    note: 'Measured from the end of the last line, not the start. Too short '
+        + 'and it nags; too long and it stops competing with the other two.' });
+  const pVoiceCommentary = panel.slider('How often it comments', {
+    key: 'voice-commentary', value: 0.34, min: 0, max: 1, step: 0.01,
+    note: 'Directions are the job; this is the share of routine lines that '
+        + 'are about how you are doing instead of where to go. Reactions to '
+        + 'something you just did — going past it, rushing, stopping — are '
+        + 'not rationed by this and always land.' });
+  const pVoiceFast = panel.slider('Counts as too fast (deg/s)', {
+    key: 'voice-fast', value: 170, min: 60, max: 400, step: 10,
+    note: 'Wide on purpose. Measured gesture peaks run to 142 and up, and a '
+        + 'running motor already lifts the resting gyro reading.' });
+
   panel.group('Live');
   panel.readout('turn speed (deg/s)', () => liveTurn.toFixed(0));
   // How far the orb is from neutral. Should drop to ~0 on every transition
@@ -377,6 +434,16 @@ async function main() {
   panel.readout('goal off-centre (deg)', () => goalAngle.toFixed(0));
   panel.readout('spot off-centre (deg)', () => spotAngle.toFixed(0));
   panel.readout('held on the spot (s)', () => foundHold.toFixed(1));
+  panel.readout('voice off-centre (deg)', () => voiceAngle.toFixed(0));
+  // The director's mind, so a wrong turn can be read rather than guessed at:
+  // which axis it thinks has the work left, and which way it settled on.
+  panel.readout('voice yaw / pitch', () =>
+    `${voiceYaw.toFixed(0)} / ${voicePitch.toFixed(0)}`);
+  panel.readout('voice says', () => voice.debug().lastLimb ?? '—');
+  // Six separate gates can hold a line back and none of them are visible from
+  // the outside. This says which one.
+  panel.readout('voice gate', () => voice.debug().gate);
+  panel.readout('held on the voice (s)', () => voiceHold.toFixed(1));
   panel.readout('motor', () => motorLevel.toFixed(2));
   panel.readout('hole caught', () => goalWins + (evading ? ' — backing away' : ''));
   panel.readout('stage', () => String(stageIdx));
@@ -622,25 +689,65 @@ async function main() {
   const spotScreen = new THREE.Vector3();
   const spotTarget = new THREE.Vector3();
   const spotPick = new THREE.Vector3();
+  const bestPick = new THREE.Vector3();
   const fleeAxis = new THREE.Vector3();
   const fleeQ = new THREE.Quaternion();
 
-  function placeSpot() {
+  // --- the point the voice is steering toward -------------------------------
+  // Also unmarked, and unlike the spot there is not even a gradient: the words
+  // are the only thing that says where it is.
+  const voiceHome = new THREE.Vector3();
+  const voiceBody = new THREE.Vector3();
+  const voiceScreen = new THREE.Vector3();
+  const voiceTarget = new THREE.Vector3();
+
+  // Reject-and-fall-back was fine for one errand and is not fine for two. At
+  // the defaults the band a spot may land in is about an eighth of the sphere;
+  // a second exclusion cuts that to a fourteenth, and at the top of the
+  // separation sliders it is empty. The old fallback -- directly opposite the
+  // goal -- would then fire for *both* placements, and two of the three
+  // errands would silently become one point, at slider positions that will
+  // certainly get tried.
+  //
+  // Scoring instead of rejecting cannot fail. Each constraint is measured as a
+  // fraction of its own threshold, so a candidate clearing all of them scores
+  // 1 and is taken immediately; if nothing clears, the roomiest place left
+  // wins, which is the honest answer to an impossible request.
+  function placeAwayFrom(out, avoid) {
+    let bestScore = -1;
     for (let i = 0; i < 128; i++) {
       spotPick.randomDirection();
-      if (spotPick.angleTo(goalHome) * DEG < pSpotSep.value) continue;
-      if (spotPick.angleTo(viewDir) * DEG < pSpotFromStart.value) continue;
-      spotHome.copy(spotPick);
-      return;
+      let score = Infinity;
+      for (const a of avoid) {
+        score = Math.min(score, (spotPick.angleTo(a.dir) * DEG) / Math.max(a.deg, 1));
+      }
+      if (score > bestScore) { bestScore = score; bestPick.copy(spotPick); }
+      if (score >= 1) break;
     }
-    // A large separation leaves very little sphere to land on, so rejection
-    // sampling can come up empty. Directly opposite the goal always satisfies
-    // it, and is where the conflict is sharpest anyway.
-    spotHome.copy(goalHome).negate();
+    out.copy(bestPick);
+  }
+
+  function placeSpot() {
+    placeAwayFrom(spotHome, [
+      { dir: goalHome, deg: pSpotSep.value },
+      { dir: viewDir, deg: pSpotFromStart.value },
+    ]);
+    placeAwayFrom(voiceHome, [
+      { dir: goalHome, deg: pVoiceSep.value },
+      { dir: spotHome, deg: pVoiceSep.value },
+      { dir: viewDir, deg: pSpotFromStart.value },
+    ]);
   }
   placeSpot();
   spotBody.copy(spotHome);
   spotScreen.copy(spotHome);
+  voiceBody.copy(voiceHome);
+  voiceScreen.copy(voiceHome);
+
+  const voice = createVoice(clipsJson, {
+    say: (id) => orb.say(id),
+    hush: () => orb.hush(),
+  });
 
   // Both errands, placed against the view as it is right now: the hole on the
   // far side and tilted up until it just crests the top, the spot somewhere
@@ -652,7 +759,14 @@ async function main() {
     goalBody.copy(goalHome).applyQuaternion(invAtt);
     placeSpot();
     spotBody.copy(spotHome).applyQuaternion(invAtt);
+    voiceBody.copy(voiceHome).applyQuaternion(invAtt);
     foundHold = 0;
+    // Same reason foundHold is cleared here: a hold carried over from the last
+    // errand would fire the transition the instant this one is placed. And the
+    // director's latched direction, its running best angle and its pending
+    // events all refer to a point that has just moved.
+    voiceHold = 0;
+    voice.reset(performance.now());
   }
 
   // --- the chain of stages --------------------------------------------------
@@ -696,8 +810,14 @@ async function main() {
   syncStageZero();
 
   function advanceStage() {
-    if (fireSource === 'spot') goalWins = 0;
-    else goalWins++;
+    // Only the eye's win counts toward the hole backing away; either of the
+    // other two puts it back to nought. Worth saying out loud rather than
+    // reading as a tidy-up: with three routes and two of them zeroing the
+    // count, two goal wins in a row is now genuinely rare, so evasion fires
+    // much less often than it used to. That is a choice, not a side effect.
+    // (Note the 't' key fires as 'goal', so hand-testing still walks it up.)
+    if (fireSource === 'goal') goalWins++;
+    else goalWins = 0;
     deriveStage(nextCol);
     rotateHue(nextCol, pHueStep.value);
     stageIdx++;
@@ -745,6 +865,8 @@ async function main() {
   let heldAmt = 0, moveVis = 0, bodyVis = 1, goalVis = 1;
   let goalAngle = 180, aimNear = 0;
   let spotAngle = 180, spotNear = 0, foundHold = 0, foundPulse = 0;
+  let voiceAngle = 180, voiceHold = 0, voiceYaw = 0, voicePitch = 0;
+  let hadVoice = false, lastVol = -1;
   let dwell = 0, armed = false, goalMix = 1, goalOpen = 0.1;
   // Turns won at the hole since the last one won at the spot. Past the
   // threshold the hole stops being catchable and the spot is the only way on.
@@ -849,6 +971,23 @@ async function main() {
     else if (still) foundHold += dt;      // holding it, but not while fidgeting
     foundPulse = smooth01(ramp(foundHold - pPulseAfter.value, 0, pPulseFade.value));
 
+    // --- and where the voice's point is -------------------------------------
+    voiceTarget.copy(voiceBody).applyQuaternion(smoothed).normalize();
+    voiceScreen.lerp(voiceTarget, 1 - Math.exp(-dt * pFollow.value)).normalize();
+    voiceAngle = Math.acos(Math.max(-1, Math.min(1, voiceScreen.dot(viewDir)))) * DEG;
+
+    const voiceFound = voiceAngle < pVoiceFound.value;
+    // Read up here rather than down with the rest of the presence handling,
+    // because the voice's *hold* has to be gated on it and not just its
+    // talking: set down, the orb is perfectly still by definition, so an
+    // errand left facing the camera would count as found, climb, and fire the
+    // transition to an empty room.
+    const held = !!(orb.latest && orb.latest.held > 0.5);
+    // Same shape as the spot's hold, and for the same reason: fidgeting on the
+    // right answer is not the same as arriving at it.
+    if (!voiceFound || !held) voiceHold = Math.max(0, voiceHold - dt * 2);
+    else if (still) voiceHold += dt;
+
     aimNear = smooth01(ramp(pAimWide.value - goalAngle, 0, Math.max(pAimWide.value - pAimAngle.value, 1)));
     // Fully open once it is inside the reacting angle, a rumour by the time it
     // is round the back. Squared, because a linear ramp still reads as a lamp
@@ -881,6 +1020,15 @@ async function main() {
       if (foundHold >= pPulseAfter.value + pSpotFire.value) {
         phaseState = 'in'; stateT = 0; dwell = 0; fireSource = 'spot'; foundHold = 0;
       }
+
+      // And the third. The voice says hold it there and then stops talking, so
+      // unlike the other two there is no signal at all during the wait -- the
+      // silence is the countdown.
+      if (pVoice.value && voiceHold >= pVoiceFire.value) {
+        phaseState = 'in'; stateT = 0; dwell = 0; fireSource = 'voice';
+        voiceHold = 0;
+        voice.win(performance.now());
+      }
     } else {
       stateT += dt;
       if (phaseState === 'in') {
@@ -896,7 +1044,7 @@ async function main() {
     }
 
     // --- only visible while moving ------------------------------------------
-    const heldTarget = orb.latest && orb.latest.held > 0.5 ? 1 : 0;
+    const heldTarget = held ? 1 : 0;
     // Setting the orb down ends the session: the hole forgets it was ever
     // caught and goes back to the far side, and the spot is hidden again.
     // This used to ride on the re-levelling epoch; now that setting the orb
@@ -904,6 +1052,10 @@ async function main() {
     // always meant.
     if (wasHeld && !heldTarget) {
       goalWins = 0;
+      // Put down mid-sentence, stop mid-sentence. Letting the line finish to
+      // an empty table is the one thing that would make the voice feel like a
+      // recording rather than something addressing you.
+      voice.silence();
       placeErrands();
     }
     wasHeld = !!heldTarget;
@@ -984,8 +1136,10 @@ async function main() {
           // and falls with the collapse rather than a refusal.
           motorLevel = pYesStrength.value * Math.sqrt(Math.max(collapse, 0));
         } else {
-          // Reaching the collapsing point is the eye's win, not the hand's.
-          // Two flat refusals -- no, no -- and then silence.
+          // Reaching the collapsing point is the eye's win, and the voice's
+          // point is the voice's. Neither is the hand's, and the hand only
+          // approves of its own errand: two flat refusals -- no, no -- and
+          // then silence.
           const since = stateT + (phaseState === 'out' ? pInSecs.value : 0);
           const len = pNoLen.value;
           const gap = pNoGap.value;
@@ -1006,6 +1160,51 @@ async function main() {
       motorLevel = 0;
       orb.releaseHaptic();
       hadHaptics = false;
+    }
+
+    // --- and the voice, arguing too -----------------------------------------
+    if (pVoice.value) {
+      if (pVoiceVol.value !== lastVol) {
+        lastVol = pVoiceVol.value;
+        orb.setVolume(lastVol);
+      }
+      const d = decompose(voiceScreen);
+      voiceYaw = d.yaw;
+      voicePitch = d.pitch;
+      // Called every frame, not only when it may speak: the events it reacts
+      // to are edges, and an edge that happens mid-sentence is an edge lost
+      // for good if nothing is watching for it.
+      voice.update({
+        nowMs: performance.now(),
+        dt,
+        angle: voiceAngle,
+        yaw: d.yaw,
+        pitch: d.pitch,
+        liveTurn,
+        found: voiceFound,
+        // The voice is for a thing in a hand. On the table it says nothing at
+        // all -- see the note by voiceHold above.
+        held,
+        // Silent through the collapse and the bloom; that stretch belongs to
+        // the picture and the motor. And with no orb on the end of the link
+        // there is no pose, so there is nothing honest to say about it.
+        active: phaseState === 'idle' && orb.device,
+        opts: {
+          foundDeg: pVoiceFound.value,
+          fastDps: pVoiceFast.value,
+          stillDps: pStillTurn.value,
+          gapMs: pVoiceGap.value * 1000,
+          commentary: pVoiceCommentary.value,
+          set: pVoiceSetB.value ? 'B' : 'A',
+          flipLR: pVoiceFlipLR.value,
+          flipTA: pVoiceFlipTA.value,
+        },
+      });
+      hadVoice = true;
+    } else if (hadVoice) {
+      orb.hush();
+      voice.reset(performance.now());
+      hadVoice = false;
     }
 
     hud.update(stage);

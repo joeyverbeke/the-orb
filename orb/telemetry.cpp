@@ -1,4 +1,5 @@
 #include "telemetry.h"
+#include "voice.h"
 #include "config.h"
 #include "haptic.h"
 #include "presence.h"
@@ -66,6 +67,10 @@ void telemetry_print_config() {
   Serial.print(F("# presence_putdown_ms=")); Serial.println(cfg.presence_putdown_ms, 0);
   Serial.print(F("# haptics_on="));   Serial.println(cfg.haptics_on ? 1 : 0);
   Serial.print(F("# drv_ready="));    Serial.println(haptic_ready() ? 1 : 0);
+  Serial.print(F("# voice_ready=")); Serial.println(voice_ready() ? 1 : 0);
+  Serial.print(F("# voice_fs="));    Serial.println(voice_fs() ? 1 : 0);
+  Serial.print(F("# voice_gain="));  Serial.println(voice_gain(), 3);
+  Serial.print(F("# voice_clip="));  Serial.println(voice_clip());
   Serial.print(F("# imu_resets="));   Serial.println(imu_reset_count());
   Serial.print(F("# loop_hz="));      Serial.println(hz, 1);
 }

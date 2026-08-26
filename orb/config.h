@@ -15,6 +15,17 @@ static const int PIN_SCL  = 6;
 static const int PIN_SDA1 = 3;
 static const int PIN_SCL1 = 4;
 
+// D10/D9/D8 -- MAX98357A. SD is hardwired to 3V3 (12 dB gain), so there is no
+// enable line: the amp is always powered and silence is the only mute.
+static const int PIN_I2S_BCLK  = 9;
+static const int PIN_I2S_LRCLK = 8;
+static const int PIN_I2S_DIN   = 7;
+
+// Speech only, and out of a 4 ohm cone the size of a coin. 16 kHz is plainly
+// intelligible here and buys ~150 s of clips in the 4.6875 MB partition, where
+// 24 kHz would buy 100.
+static const uint32_t VOICE_SAMPLE_RATE = 16000;
+
 static const uint8_t ADDR_BNO085  = 0x4A;   // 0x4B if the ADR jumper is bridged
 static const uint32_t I2C_HZ      = 400000;
 

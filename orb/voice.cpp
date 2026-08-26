@@ -1,5 +1,6 @@
 #include "voice.h"
 #include "config.h"
+#include "io.h"
 
 #include <Arduino.h>
 #include <ESP_I2S.h>
@@ -150,7 +151,7 @@ void voice_tick() {
   int c = now_clip;
   if (c != last_reported) {
     last_reported = c;
-    Serial.print(F("# voice_clip=")); Serial.println(c);
+    io().print(F("# voice_clip=")); io().println(c);
   }
 }
 

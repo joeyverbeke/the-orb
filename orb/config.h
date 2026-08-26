@@ -31,6 +31,11 @@ static const uint32_t I2C_HZ      = 400000;
 
 static const uint32_t SERIAL_BAUD = 921600;
 
+// The wireless link. The orb listens here; tools/bridge.py dials in. Credentials
+// live in secrets.h, which is not tracked -- copy secrets_example.h to it.
+static const uint16_t ORB_TCP_PORT = 3333;
+static const char     ORB_HOSTNAME[] = "orb";
+
 static const float RAD2DEG = 57.2957795f;
 static const float PI_F    = 3.14159265f;
 

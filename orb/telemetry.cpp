@@ -2,6 +2,7 @@
 #include "voice.h"
 #include "config.h"
 #include "haptic.h"
+#include "io.h"
 #include "presence.h"
 #include "texture.h"
 
@@ -12,7 +13,7 @@ static uint32_t win_frames   = 0;
 static float    hz           = 0.0f;
 
 // Off by default. Printing 100 rows/s into a USB CDC that nobody is draining
-// can block Serial.write and stall the loop -- which, held in the hand with no
+// can block io().write and stall the loop -- which, held in the hand with no
 // monitor open, would look like the orb simply dying. The bridge turns it on.
 static bool     streaming    = false;
 
@@ -33,46 +34,46 @@ void telemetry_set_streaming(bool on) {
   // one -- and would silently discard every row it read.
   if (on) {
     telemetry_print_config();
-    Serial.println(CSV_HEADER);
+    io().println(CSV_HEADER);
   }
   streaming = on;
 }
 
 void telemetry_begin() {
   telemetry_print_config();
-  Serial.println(F("# CSV is off. 'c 1' to stream, or run tools/bridge.py."));
+  io().println(F("# CSV is off. 'c 1' to stream, or run tools/bridge.py."));
   win_start_ms = millis();
   win_frames   = 0;
 }
 
 void telemetry_print_config() {
-  Serial.print(F("# quantity="));      Serial.println(cfg.quantity);
-  Serial.print(F("# quantity_name=")); Serial.println(quantity_name(cfg.quantity));
-  Serial.print(F("# source="));        Serial.println(cfg.source);
-  Serial.print(F("# source_name="));   Serial.println(source_name(cfg.source));
-  Serial.print(F("# use_axis="));      Serial.println(cfg.use_axis);
-  Serial.print(F("# deadzone_dps=")); Serial.println(cfg.deadzone_dps, 3);
-  Serial.print(F("# saturate_dps=")); Serial.println(cfg.saturate_dps, 3);
-  Serial.print(F("# gamma="));        Serial.println(cfg.gamma, 3);
-  Serial.print(F("# tau_ms="));       Serial.println(cfg.tau_ms, 3);
-  Serial.print(F("# floor_rtp="));    Serial.println(cfg.floor_rtp);
-  Serial.print(F("# pulse="));        Serial.println(cfg.pulse, 3);
-  Serial.print(F("# grain="));        Serial.println(cfg.grain, 3);
-  Serial.print(F("# wind_full_deg=")); Serial.println(cfg.wind_full_deg, 1);
-  Serial.print(F("# wind_decay_ms=")); Serial.println(cfg.wind_decay_ms, 1);
-  Serial.print(F("# dial_full_deg=")); Serial.println(cfg.dial_full_deg, 1);
-  Serial.print(F("# hold="));         Serial.println(cfg.hold, 3);
-  Serial.print(F("# presence_gate=")); Serial.println(cfg.presence_gate ? 1 : 0);
-  Serial.print(F("# presence_still_deg="));  Serial.println(cfg.presence_still_deg, 2);
-  Serial.print(F("# presence_putdown_ms=")); Serial.println(cfg.presence_putdown_ms, 0);
-  Serial.print(F("# haptics_on="));   Serial.println(cfg.haptics_on ? 1 : 0);
-  Serial.print(F("# drv_ready="));    Serial.println(haptic_ready() ? 1 : 0);
-  Serial.print(F("# voice_ready=")); Serial.println(voice_ready() ? 1 : 0);
-  Serial.print(F("# voice_fs="));    Serial.println(voice_fs() ? 1 : 0);
-  Serial.print(F("# voice_gain="));  Serial.println(voice_gain(), 3);
-  Serial.print(F("# voice_clip="));  Serial.println(voice_clip());
-  Serial.print(F("# imu_resets="));   Serial.println(imu_reset_count());
-  Serial.print(F("# loop_hz="));      Serial.println(hz, 1);
+  io().print(F("# quantity="));      io().println(cfg.quantity);
+  io().print(F("# quantity_name=")); io().println(quantity_name(cfg.quantity));
+  io().print(F("# source="));        io().println(cfg.source);
+  io().print(F("# source_name="));   io().println(source_name(cfg.source));
+  io().print(F("# use_axis="));      io().println(cfg.use_axis);
+  io().print(F("# deadzone_dps=")); io().println(cfg.deadzone_dps, 3);
+  io().print(F("# saturate_dps=")); io().println(cfg.saturate_dps, 3);
+  io().print(F("# gamma="));        io().println(cfg.gamma, 3);
+  io().print(F("# tau_ms="));       io().println(cfg.tau_ms, 3);
+  io().print(F("# floor_rtp="));    io().println(cfg.floor_rtp);
+  io().print(F("# pulse="));        io().println(cfg.pulse, 3);
+  io().print(F("# grain="));        io().println(cfg.grain, 3);
+  io().print(F("# wind_full_deg=")); io().println(cfg.wind_full_deg, 1);
+  io().print(F("# wind_decay_ms=")); io().println(cfg.wind_decay_ms, 1);
+  io().print(F("# dial_full_deg=")); io().println(cfg.dial_full_deg, 1);
+  io().print(F("# hold="));         io().println(cfg.hold, 3);
+  io().print(F("# presence_gate=")); io().println(cfg.presence_gate ? 1 : 0);
+  io().print(F("# presence_still_deg="));  io().println(cfg.presence_still_deg, 2);
+  io().print(F("# presence_putdown_ms=")); io().println(cfg.presence_putdown_ms, 0);
+  io().print(F("# haptics_on="));   io().println(cfg.haptics_on ? 1 : 0);
+  io().print(F("# drv_ready="));    io().println(haptic_ready() ? 1 : 0);
+  io().print(F("# voice_ready=")); io().println(voice_ready() ? 1 : 0);
+  io().print(F("# voice_fs="));    io().println(voice_fs() ? 1 : 0);
+  io().print(F("# voice_gain="));  io().println(voice_gain(), 3);
+  io().print(F("# voice_clip="));  io().println(voice_clip());
+  io().print(F("# imu_resets="));   io().println(imu_reset_count());
+  io().print(F("# loop_hz="));      io().println(hz, 1);
 }
 
 void telemetry_frame(const ImuFrame &f, const Drive &d, float out) {
@@ -87,33 +88,39 @@ void telemetry_frame(const ImuFrame &f, const Drive &d, float out) {
 
   if (!streaming) return;
 
+  // A backed-up link must never stall the loop -- over TCP a blocking write can
+  // sit in select() for seconds, and the orb goes dead in the hand while it
+  // does. Dropping the row instead is nearly invisible: the app interpolates
+  // between the frames that do arrive.
+  if (!io_can_write()) return;
+
   // Hand-rolled rather than printf: the core's default printf has no float
   // support, and this runs 100x/s.
-  Serial.print(f.t_ms);           Serial.print(',');
-  Serial.print(f.gx, 4);          Serial.print(',');
-  Serial.print(f.gy, 4);          Serial.print(',');
-  Serial.print(f.gz, 4);          Serial.print(',');
+  io().print(f.t_ms);           io().print(',');
+  io().print(f.gx, 4);          io().print(',');
+  io().print(f.gy, 4);          io().print(',');
+  io().print(f.gz, 4);          io().print(',');
   // Linear acceleration, gravity already removed: motion through space, as
   // opposed to rotation. Needed by anything reacting to being moved rather
   // than turned.
-  Serial.print(f.ax, 3);          Serial.print(',');
-  Serial.print(f.ay, 3);          Serial.print(',');
-  Serial.print(f.az, 3);          Serial.print(',');
-  Serial.print(d.axis[0], 2);     Serial.print(',');
-  Serial.print(d.axis[1], 2);     Serial.print(',');
-  Serial.print(d.axis[2], 2);     Serial.print(',');
-  Serial.print(f.qr, 4);          Serial.print(',');
-  Serial.print(f.qi, 4);          Serial.print(',');
-  Serial.print(f.qj, 4);          Serial.print(',');
-  Serial.print(f.qk, 4);          Serial.print(',');
-  Serial.print(d.raw, 2);         Serial.print(',');
-  Serial.print(d.strength, 4);    Serial.print(',');
-  Serial.print(d.pulse, 3);       Serial.print(',');
-  Serial.print(d.grain, 3);       Serial.print(',');
-  Serial.print(texture_envelope(), 3); Serial.print(',');
-  Serial.print(out, 4);           Serial.print(',');
-  Serial.print(haptic_rtp());     Serial.print(',');
-  Serial.print(presence_held() ? 1 : 0); Serial.print(',');
-  Serial.print(presence_displacement_deg(), 2); Serial.print(',');
-  Serial.println(hz, 1);
+  io().print(f.ax, 3);          io().print(',');
+  io().print(f.ay, 3);          io().print(',');
+  io().print(f.az, 3);          io().print(',');
+  io().print(d.axis[0], 2);     io().print(',');
+  io().print(d.axis[1], 2);     io().print(',');
+  io().print(d.axis[2], 2);     io().print(',');
+  io().print(f.qr, 4);          io().print(',');
+  io().print(f.qi, 4);          io().print(',');
+  io().print(f.qj, 4);          io().print(',');
+  io().print(f.qk, 4);          io().print(',');
+  io().print(d.raw, 2);         io().print(',');
+  io().print(d.strength, 4);    io().print(',');
+  io().print(d.pulse, 3);       io().print(',');
+  io().print(d.grain, 3);       io().print(',');
+  io().print(texture_envelope(), 3); io().print(',');
+  io().print(out, 4);           io().print(',');
+  io().print(haptic_rtp());     io().print(',');
+  io().print(presence_held() ? 1 : 0); io().print(',');
+  io().print(presence_displacement_deg(), 2); io().print(',');
+  io().println(hz, 1);
 }

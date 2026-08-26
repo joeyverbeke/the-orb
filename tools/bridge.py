@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""The orb's device link: serial <-> browser, over WebSocket.
+"""The orb's device link: orb <-> browser, over WebSocket.
 
     tools/.venv/bin/python tools/bridge.py     # this, for the device
     cd app && npm run dev                      # and this, for the UI
 
-This process owns the serial port and nothing else; Vite serves the pages.
+It reaches the orb over WiFi by default and over USB serial with --serial.
+Both carry the same lines, so nothing downstream of transport.py can tell the
+difference.
+
+This process owns the device link and nothing else; Vite serves the pages.
 Keeping them separate means the UI can hot-reload all day without dropping the
 device connection, and reflashing only requires stopping this one.
 
@@ -24,7 +28,7 @@ import time
 
 import websockets
 
-from transport import SerialTransport
+from transport import SerialTransport, WifiTransport
 
 WS_PORT = 8765
 
@@ -119,7 +123,7 @@ class Hub:
                 frames, self.pending = self.pending, []
                 await self.broadcast({"type": "frames", "frames": frames})
 
-    async def drain_serial(self) -> None:
+    async def drain_device(self) -> None:
         """Move lines off the reader thread's queue without blocking the loop."""
         q = self.transport.lines()
         while True:
@@ -174,15 +178,19 @@ async def main_async(transport) -> None:
 
     handler = functools.partial(ws_handler, hub=hub)
     async with websockets.serve(handler, WS_HOSTS, WS_PORT):
-        await asyncio.gather(hub.drain_serial(), hub.flush_loop())
+        await asyncio.gather(hub.drain_device(), hub.flush_loop())
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--serial", action="store_true",
+                    help="reach the orb over USB instead of WiFi")
+    ap.add_argument("--host", default="orb.local",
+                    help="the orb's hostname or IP (WiFi); default orb.local")
     ap.add_argument("--port", help="serial port; autodetected if omitted")
     args = ap.parse_args()
 
-    transport = SerialTransport(args.port)
+    transport = SerialTransport(args.port) if args.serial else WifiTransport(args.host)
     transport.start()
     # The reader thread opens the port, so give it a moment before reporting an
     # absence that is really just a race with startup.
@@ -191,7 +199,8 @@ def main() -> None:
             break
         time.sleep(0.05)
     if not transport.connected:
-        print("no orb found yet — will connect when one is plugged in", flush=True)
+        where = "plugged in" if args.serial else f"reachable at {args.host}"
+        print(f"no orb found yet — will connect when one is {where}", flush=True)
 
     try:
         asyncio.run(main_async(transport))

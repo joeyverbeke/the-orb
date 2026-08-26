@@ -12,13 +12,15 @@ Actuator is an **Adafruit 1201 ERM coin motor** on a DRV2605L, driven from 3V3
 
 ## Running it
 
-Two processes. The bridge owns the serial port; Vite serves the pages. Keeping
-them apart means the UI can hot-reload all day without dropping the device, and
-reflashing only needs the bridge stopped.
+Two processes. The bridge owns the device link; Vite serves the pages. Keeping
+them apart means the UI can hot-reload all day without dropping the device.
 
 ```bash
 tools/.venv/bin/python tools/bridge.py
 ```
+
+That reaches the orb **over WiFi**, at `orb.local`. `--host <ip>` if the name
+does not resolve, `--serial` for the USB path — see [Wireless](#wireless).
 
 ```bash
 cd app && npm run dev
@@ -26,8 +28,10 @@ cd app && npm run dev
 
 Then open **http://localhost:5173**.
 
-Reflashing — **stop the bridge first**, or the held port makes uploads fail with
-errors that look like a dead board:
+Reflashing. On the WiFi path the bridge holds no serial port, so it can be left
+running — it reconnects when the orb comes back. On `--serial`, **stop it
+first**, or the held port makes uploads fail with errors that look like a dead
+board:
 
 ```bash
 arduino-cli compile --upload -p /dev/cu.usbmodemXXXX -b esp32:esp32:XIAO_ESP32S3:PSRAM=opi orb
@@ -37,6 +41,12 @@ Setup, once. Node 22.12+ is required by Vite 8; `app/.nvmrc` pins it.
 
 ```bash
 python3 -m venv tools/.venv && tools/.venv/bin/pip install pyserial matplotlib websockets
+```
+
+The firmware needs network credentials, which are not in the repo:
+
+```bash
+cp orb/secrets_example.h orb/secrets.h
 ```
 
 ```bash
@@ -51,14 +61,88 @@ plugged into it is the confusing case:
 | shown | meaning |
 |---|---|
 | `link down` | `bridge.py` is not running |
-| `link no orb` | bridge is fine, nothing plugged in (or it was unplugged) |
+| `link no orb` | bridge is fine, the orb is not answering (off, or off the network) |
 | `link up` | frames are flowing |
 
-The bridge **reconnects on its own**: it can be started before the orb is
-plugged in, survives unplugging and reflashing, and re-detects the port — which
-changes between replugs. On every connection it re-sends `c 1`, because the orb
-boots with CSV streaming off; an open-but-silent port is otherwise
-indistinguishable from a dead one.
+The bridge **reconnects on its own**: it can be started before the orb is, and
+it survives the orb rebooting, being reflashed, or wandering off the network.
+On every connection it re-sends `c 1`, because the orb boots with CSV streaming
+off; an open-but-silent link is otherwise indistinguishable from a dead one.
+
+## Wireless
+
+The orb is a station on an ordinary 2.4 GHz network and **listens** on TCP 3333;
+the bridge dials in. That way round because the laptop's address changes with
+every network it joins and the orb's name does not — `MDNS` publishes it as
+`orb.local`. It also prints its IP over USB at boot, which is the answer when
+mDNS is being unhelpful:
+
+```bash
+tools/.venv/bin/python tools/bridge.py --host 192.168.1.42
+```
+
+Credentials live in `orb/secrets.h`, which is not tracked. Changing networks
+means editing it and reflashing — there is no OTA slot, it was spent on voice
+clips.
+
+**The line protocol is byte-identical to the serial one.** Same CSV, same
+one-letter commands, and `bridge.py --serial` still works, which is what makes
+USB a real fallback at a show rather than a second thing to maintain.
+
+Three things make it stable rather than merely working:
+
+- **Modem sleep is off.** An ESP32 station parks its radio between beacons by
+  default, which adds up to ~100 ms to anything arriving from the host. At
+  100 Hz that is the difference between a link you can feel through and one you
+  cannot.
+- **Writes never block.** `NetworkClient::write` retries around a one-second
+  `select()`, ten times — so a host that stops reading can park `loop()` for ten
+  seconds and the orb goes dead in the hand. `net_write` does the `send` itself
+  with `MSG_DONTWAIT`. **Dropping a frame is always cheaper than dropping the
+  loop**, and the interpolator in `motion.js` is built to absorb exactly that.
+- **But not every line may be dropped**, which is the part that bit. The first
+  thing a host does on connecting is ask for the settings block — ~1.4 kB of
+  small lines into a socket whose window has not opened yet. Sending those
+  non-blocking loses most of them: measured, **20 of 56 arrived, and the CSV
+  header was among the missing**, so the bridge sat there discarding every row
+  that followed. They go through a 4 kB outbound queue in `net.cpp` instead,
+  drained as the link allows. Telemetry only joins that queue when it is nearly
+  empty — the queue is for bursts, not for buffering the stream, and a row that
+  would arrive stale is better skipped.
+- **A row is one packet.** A CSV row is ~24 separate `print` calls, which with
+  Nagle disabled would be 24 packets at 100 Hz. `io()` buffers to the newline.
+  The USB path gets the same fix for free — it was 24 separately-locked writes
+  into a stream with a 100 ms tx timeout.
+
+**What it costs.** Measured on an iPhone hotspot, orb on the desk, against the
+same six seconds over USB:
+
+| | serial | WiFi |
+|---|---|---|
+| device `loop_hz` | 100.0 (min 99.9) | 97.9 (min 93.8) |
+| rows delivered | 100.0 /s | 94.5 /s of device clock |
+| inter-frame gap | — | median 10 ms, p95 13 ms, **max 91 ms** |
+
+So about 2% off the loop rate and about 5% of rows skipped, split roughly evenly
+between the slower loop and the queue guard. The device's own sampling is still
+rock steady at 10 ms; everything above is introduced by the radio.
+
+That 91 ms worst case is the number that matters for how it looks. It is the
+biggest hole the interpolator has to bridge, so if motion goes steppy raise
+**Motion delay** past it and watch `buffered (ms)` — that is what the control is
+for, and it needs more headroom here than it did on USB.
+
+mDNS is started on a **retry**, not once when the network comes up: `mdns_init`
+fails if the interface is not quite ready, and it did — first flash came up
+reachable only by DHCP address. Whether `orb.local` resolves is worth checking
+directly, since a DHCP-registered hostname can answer for it and hide the
+failure: `dns-sd -B _orb._tcp` should list an instance named `orb`.
+
+A dropped socket **silences the orb**: streaming stops and any host-driven hold
+is released. The serial path gets `c 0` from the bridge on its way out; a socket
+that dies has no such chance, so the device has to enforce it. Only one host at
+a time, and a newcomer evicts the incumbent — a laptop that slept leaves a
+half-open socket that looks perfectly alive from the orb's end.
 
 ## The app
 
@@ -303,10 +387,14 @@ moved      much         character      motor
 | [voice.cpp](orb/voice.cpp) | MAX98357A over I2S, clips off LittleFS, on its own core |
 | [telemetry.cpp](orb/telemetry.cpp) | CSV out + loop rate |
 | [console.cpp](orb/console.cpp) | terse command protocol |
+| [net.cpp](orb/net.cpp) | WiFi station, TCP server, non-blocking writes |
+| [io.cpp](orb/io.cpp) | which link the words go to, one write per line |
 
-Host side: [transport.py](tools/transport.py) (swap serial for WiFi here, and
-nothing above it changes), [bridge.py](tools/bridge.py) (serial ↔ WebSocket),
-and [record.py](tools/record.py) / [plot.py](tools/plot.py) for offline capture.
+Host side: [transport.py](tools/transport.py) (serial and WiFi, both in whole
+text lines — nothing above it can tell which is in use),
+[bridge.py](tools/bridge.py) (device ↔ WebSocket), and
+[record.py](tools/record.py) / [plot.py](tools/plot.py) for offline capture over
+USB.
 
 The firmware speaks compact CSV and one-letter commands; the bridge does all
 the JSON and naming, so the ESP32 never spends cycles on presentation.

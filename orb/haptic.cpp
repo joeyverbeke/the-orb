@@ -1,5 +1,6 @@
 #include "haptic.h"
 #include "config.h"
+#include "io.h"
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -91,15 +92,15 @@ void haptic_tick() {
     if (sweep_rtp > 127 - SWEEP_STEP) {
       sweeping = false;
       writeRtp(0);
-      Serial.println(F("# sweep done -- set the floor with: f <value>"));
+      io().println(F("# sweep done -- set the floor with: f <value>"));
       return;
     }
     sweep_rtp += SWEEP_STEP;
     writeRtp(sweep_rtp);
     // No '=' in this line: the bridge reads "# key=value" as settings, and a
     // sweep readout is not a setting.
-    Serial.print(F("# sweep rtp "));
-    Serial.println(sweep_rtp);
+    io().print(F("# sweep rtp "));
+    io().println(sweep_rtp);
     return;
   }
 
@@ -113,6 +114,6 @@ void haptic_sweep_start() {
   sweep_rtp     = 0;
   sweep_step_ms = millis();
   writeRtp(0);
-  Serial.println(F("# sweep: rising 0..127. Note where the motor first turns,"));
-  Serial.println(F("#        and where you can first feel it. 'z' aborts."));
+  io().println(F("# sweep: rising 0..127. Note where the motor first turns,"));
+  io().println(F("#        and where you can first feel it. 'z' aborts."));
 }

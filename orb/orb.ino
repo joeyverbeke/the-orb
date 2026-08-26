@@ -17,6 +17,7 @@
 #include "haptic.h"
 #include "imu.h"
 #include "modes.h"
+#include "net.h"
 #include "presence.h"
 #include "telemetry.h"
 #include "texture.h"
@@ -36,6 +37,9 @@ void setup() {
   while (!Serial && millis() - t0 < 1500) { }
 
   Serial.println(F("# --- the orb ---"));
+
+  // First, so association runs in the background while the buses come up.
+  net_begin();
 
   haptic_ok = haptic_begin();
   Serial.println(haptic_ok ? F("# DRV2605L ok (ERM, realtime mode)")
@@ -59,6 +63,7 @@ void setup() {
 }
 
 void loop() {
+  net_tick();             // accepts a host, watches the association
   console_tick();
   haptic_tick();          // steps a running sweep; idle-stops a stale motor
   voice_tick();           // reports clip start/end; the audio itself is on core 0

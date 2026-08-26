@@ -52,7 +52,7 @@ void console_help() {
   io().println(F("#   k <0|1>    silence the motor when set down"));
   io().println(F("#   h <0|1>    haptics    m  motor sweep    z  stop"));
   io().println(F("#   A <n>      play voice clip n (-1 stops), no settings echo"));
-  io().println(F("#   U <0..1>   voice volume, no settings echo"));
+  io().println(F("#   U <0..4>   voice volume, 1 = clip peaks, no settings echo"));
   io().println(F("#   c <0|1>    CSV stream    p  print settings    ?  this"));
 }
 

@@ -379,11 +379,18 @@ async function main() {
   // --- the voice, arguing too -----------------------------------------------
   panel.group('Voice');
   const pVoice = panel.toggle('Speak', true, { key: 'voice-on' });
+  // Keyed -v2 so the ceiling change actually reaches anyone who already tuned
+  // this: the old key would restore a saved 0.6 and quietly undo it.
   const pVoiceVol = panel.slider('Volume', {
-    key: 'voice-vol', value: 0.6, min: 0, max: 1, step: 0.01,
-    note: 'The amp is hardwired at +12 dB, so this is the only volume control '
-        + 'there is. Start it low: a loud syllable and a motor pulse land at '
-        + 'the same moment, off the same event, on the same 3V3 rail.' });
+    key: 'voice-vol-v2', value: 2, min: 0, max: 4, step: 0.05,
+    note: 'The amp is fixed at +12 dB in hardware, so this is the only volume '
+        + 'control there is. 1.0 is the clips as recorded; past that their '
+        + 'peaks saturate on the device, which is exactly how speech is made '
+        + 'louder — the peaks are brief and rare, so it takes a lot of this '
+        + 'before it reads as distortion rather than as volume. Watch the '
+        + 'orb rebooting if you run it high with the motor going: they share '
+        + 'the 3V3 rail, and a loud syllable lands on the same event as a '
+        + 'pulse.' });
   const pVoiceSetB = panel.toggle('Unambiguous phrasing', false, {
     key: 'voice-set-b',
     note: 'Off: "Rotate it left." On: "Bring the right side round toward you." '

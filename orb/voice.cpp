@@ -37,7 +37,12 @@ static int16_t buf[CHUNK];
 static int16_t silence[CHUNK];
 
 static inline int16_t apply_gain(int16_t s) {
-  int32_t v = ((int32_t)s * gain_q15) >> 15;
+  // 64-bit deliberately. In Q15 the product overflows int32 above 2x gain --
+  // 32767 * (4 << 15) is 4.3e9 -- and a signed overflow here would wrap a
+  // loud sample to the opposite rail, which is a full-scale click in the
+  // middle of a word. The clamp below is what makes gain above 1.0 usable at
+  // all: it saturates the peaks instead of wrapping them.
+  int64_t v = ((int64_t)s * gain_q15) >> 15;
   if (v >  32767) v =  32767;
   if (v < -32768) v = -32768;
   return (int16_t)v;
@@ -141,7 +146,7 @@ void voice_stop() { voice_play(-1); }
 
 void voice_set_gain(float g) {
   if (g < 0.0f) g = 0.0f;
-  if (g > 1.0f) g = 1.0f;
+  if (g > VOICE_MAX_GAIN) g = VOICE_MAX_GAIN;
   gain_q15 = (int32_t)(g * 32768.0f);
 }
 

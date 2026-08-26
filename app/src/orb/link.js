@@ -14,6 +14,7 @@ const HAPTIC_CMD = 'v';
 // echo list, so driving them off state changes does not dump config blocks.
 const VOICE_CMD = 'A';
 const VOICE_GAIN_CMD = 'U';
+const VOICE_MAX_GAIN = 4;
 
 // No point sending faster than the motor can respond; the ERM's own spin-up is
 // 40-60 ms.
@@ -191,8 +192,10 @@ export class OrbLink {
     this.send(`${VOICE_CMD} -1`);
   }
 
+  // Matches VOICE_MAX_GAIN in orb/config.h. Above 1 the clips' peaks saturate
+  // on the device rather than wrapping, which is what buys the extra loudness.
   setVolume(v) {
-    this.send(`${VOICE_GAIN_CMD} ${Math.max(0, Math.min(1, v)).toFixed(3)}`);
+    this.send(`${VOICE_GAIN_CMD} ${Math.max(0, Math.min(VOICE_MAX_GAIN, v)).toFixed(3)}`);
   }
 
   /** Clip the firmware says is sounding right now, -1 for none. */

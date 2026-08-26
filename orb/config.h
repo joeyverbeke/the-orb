@@ -26,6 +26,14 @@ static const int PIN_I2S_DIN   = 7;
 // 24 kHz would buy 100.
 static const uint32_t VOICE_SAMPLE_RATE = 16000;
 
+// Ceiling for the voice gain ('U'). Well above unity on purpose: the clips are
+// peak-normalised at build time, and speech has a high crest factor, so its
+// average level sits far below its peaks. Pushing past 1.0 saturates those
+// brief peaks and lifts everything else -- which is most of what "louder"
+// means here. The amp itself is fixed at +12 dB in hardware, so this is the
+// only volume control there is.
+static const float VOICE_MAX_GAIN = 4.0f;
+
 static const uint8_t ADDR_BNO085  = 0x4A;   // 0x4B if the ADR jumper is bridged
 static const uint32_t I2C_HZ      = 400000;
 

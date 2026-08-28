@@ -33,7 +33,24 @@ static void i2cRecover() {
 // streams at 100 Hz is about a third of a 400 kHz bus -- known to fit -- and
 // later modules want them without re-measuring bus headroom.
 static bool enableReports() {
-  bool ok  = bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000);   // 100 Hz
+  // The AR/VR stabilised game rotation vector. Three words, each load-bearing:
+  //
+  //   *game*        -- no magnetometer. Not a preference: the orb has a 3 W
+  //                    speaker and an ERM motor inside it, and their magnets
+  //                    are larger than the earth's field by orders of
+  //                    magnitude. Measured on the bench with both removed the
+  //                    fusion still would not hold a heading, so north was
+  //                    never going to be the answer here.
+  //   *stabilised*  -- the variant built to suppress heading drift and the
+  //                    jumps that come with re-estimating it. Which is the
+  //                    entire complaint: the reported heading would not come
+  //                    back to the same value after the ball had been handled,
+  //                    tens of degrees at a time.
+  //
+  // Absolute yaw is unrecoverable either way. What this has to do is hold a
+  // *relative* heading steady for a session, which is all the experience ever
+  // asked of it.
+  bool ok  = bno08x.enableReport(SH2_ARVR_STABILIZED_GRV, 10000);    // 100 Hz
   ok &= bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED,   10000);
   ok &= bno08x.enableReport(SH2_LINEAR_ACCELERATION,    10000);
   ok &= bno08x.enableReport(SH2_ACCELEROMETER,          10000);
@@ -70,11 +87,11 @@ bool imu_poll(ImuFrame &out) {
   // interleaved; only the gyro closes a frame.
   while (bno08x.getSensorEvent(&sensorValue)) {
     switch (sensorValue.sensorId) {
-      case SH2_GAME_ROTATION_VECTOR:
-        latched.qr = sensorValue.un.gameRotationVector.real;
-        latched.qi = sensorValue.un.gameRotationVector.i;
-        latched.qj = sensorValue.un.gameRotationVector.j;
-        latched.qk = sensorValue.un.gameRotationVector.k;
+      case SH2_ARVR_STABILIZED_GRV:
+        latched.qr = sensorValue.un.arvrStabilizedGRV.real;
+        latched.qi = sensorValue.un.arvrStabilizedGRV.i;
+        latched.qj = sensorValue.un.arvrStabilizedGRV.j;
+        latched.qk = sensorValue.un.arvrStabilizedGRV.k;
         break;
 
       case SH2_LINEAR_ACCELERATION:

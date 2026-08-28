@@ -123,6 +123,24 @@ export function createMotion(orb, { delayMs = 70, relevel = true } = {}) {
     return true;
   }
 
+  // The reference is one angle about the vertical, so it can also just be
+  // *stated* rather than read off a pose. That is the only honest way to aim a
+  // featureless sphere: there is no front to point at the screen, so a heading
+  // taken from how the ball is being held is a guess, and a different guess
+  // every time. Dialled by hand against what the ball is visibly doing, it
+  // converges instead -- a search rather than a draw.
+  //
+  // Marks itself levelled, so a heading restored before the first frame is not
+  // overwritten by the connect-time capture below.
+  function setHeading(rad) {
+    home.set(0, Math.sin(rad / 2), 0, Math.cos(rad / 2));
+    homeInv.copy(home).invert();
+    levelled = true;
+    epoch++;
+  }
+
+  const headingOf = () => 2 * Math.atan2(home.y, home.w);
+
   function doRelevel(raw) {
     if (levelled) {
       // What the body is showing right now becomes what the field has to undo,
@@ -187,6 +205,20 @@ export function createMotion(orb, { delayMs = 70, relevel = true } = {}) {
       if (!takeHeading(here.copy(home).multiply(state.quaternion))) return false;
       epoch++;
       return true;
+    },
+
+    /** The heading reference, radians about the vertical. Reading it gives
+     *  something worth storing; setting it restores one, which is what makes a
+     *  reload stop throwing the reference away. */
+    get heading() { return headingOf(); },
+    set heading(rad) { setHeading(rad); },
+
+    /** Turn the reference by `rad` and report where it landed. The whole
+     *  picture turns about the vertical with it -- which is the point: it is
+     *  what lets the aim be seen while it is being corrected. */
+    nudgeHeading(rad) {
+      setHeading(headingOf() + rad);
+      return headingOf();
     },
 
     sample() {

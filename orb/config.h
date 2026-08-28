@@ -35,6 +35,14 @@ static const uint32_t VOICE_SAMPLE_RATE = 16000;
 static const float VOICE_MAX_GAIN = 4.0f;
 
 static const uint8_t ADDR_BNO085  = 0x4A;   // 0x4B if the ADR jumper is bridged
+// 400 kHz, and it has to stay there: four reports at 100 Hz is about a quarter
+// of this bus and very nearly all of a 100 kHz one. Starve it and reports back
+// up in the BNO085's queue and are dropped, which thins the frame stream --
+// and `presence.cpp` measures stillness over a fixed *number of frames*, so a
+// thinner stream stretches that window and setting the orb down takes visibly
+// longer to register. Tried 100 kHz once against suspected breadboard noise;
+// it cost the timing and bought nothing, because the fusion runs on the chip
+// and never sees this bus.
 static const uint32_t I2C_HZ      = 400000;
 
 static const uint32_t SERIAL_BAUD = 921600;

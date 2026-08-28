@@ -12,7 +12,7 @@ struct ImuFrame {
   float gx, gy, gz;               // calibrated gyro, rad/s
   float ax, ay, az;               // linear accel, m/s^2, gravity removed
   float rax, ray, raz;            // raw accel, m/s^2, gravity included
-  float qr, qi, qj, qk;           // game rotation vector (no magnetometer)
+  float qr, qi, qj, qk;           // AR/VR stabilised game rotation vector
 
   float dt_ms;                    // since the previous gyro frame
   bool  discontinuity;            // dt was implausible -- drop windowed state

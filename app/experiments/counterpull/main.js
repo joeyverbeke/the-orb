@@ -630,6 +630,26 @@ async function main() {
   // whole of what was wrong before. Setting the orb down changes nothing now;
   // heading is declared with `h`, at a moment that carries intent.
   const motion = createMotion(orb, { delayMs: pDelay.value, relevel: false });
+
+  // Which way the room is. Not measurable: a blank sphere has no front to aim,
+  // and the magnetometer is deaf inside an orb built around a speaker magnet.
+  // So it is dialled by hand with [ and ], and kept.
+  //
+  // Keeping it is half the fix. Without this the reference was re-taken from
+  // whatever pose the ball happened to be in at connect, so every reload dealt
+  // a new one and the mapping was right or wrong by luck. Now a reload changes
+  // nothing and the only things that move the reference are the two keys.
+  //
+  // A power cycle is still a reset: the sensor picks a fresh arbitrary zero at
+  // its own boot, and nothing stored here can know about it. Dial it again --
+  // it takes seconds, and it is the honest floor without a keyed base.
+  const HEADING_KEY = 'counterpull-heading';
+  const savedHeading = localStorage.getItem(HEADING_KEY);
+  if (savedHeading !== null && Number.isFinite(Number(savedHeading))) {
+    motion.heading = Number(savedHeading);
+  }
+  const keepHeading = () => localStorage.setItem(HEADING_KEY, String(motion.heading));
+  panel.readout('heading (deg)', () => (motion.heading * DEG).toFixed(0));
   const response = createResponse();
   const smoothed = new THREE.Quaternion();
   // The whole lookup, now that the frame never moves: L = A^-1. A feature at
@@ -849,9 +869,17 @@ async function main() {
       placeErrands();
       goalMix = 0;
       armed = false;
+    } else if (k === '[' || k === ']') {
+      // The dial. Hold the orb, tilt it the way you mean, and tap until the
+      // picture agrees. Five degrees is coarse enough to cross a bad guess in
+      // a few presses and fine enough to stop on the right answer.
+      motion.nudgeHeading((k === '[' ? -1 : 1) * 5 * D2R);
+      keepHeading();
     } else if (k === 'h') {
-      // "This way is me." The only thing gravity cannot tell us.
-      motion.tareHeading();
+      // Coarse jump: takes the pose being held as the reference. Useful to get
+      // roughly there in one go, but it is still a guess on a ball with no
+      // front -- the dial above is what actually lands it.
+      if (motion.tareHeading()) keepHeading();
     } else if (k === 't' && phaseState === 'idle') {
       // Fires the transition by hand. The collapse is most of what there is to
       // look at and it is a nuisance to have to earn it every time -- and with

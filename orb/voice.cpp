@@ -58,6 +58,20 @@ static void fade_out(int16_t *p, size_t n) {
   }
 }
 
+// i2s.write loops internally but bails out on a driver error, returning short.
+// Ignoring that return value silently drops whatever was left of the chunk,
+// which would read as distortion rather than as an error. Rare -- it takes a
+// driver-level fault to trigger -- but a dropped sample has no other symptom,
+// so it is worth the four lines to finish the write instead.
+static void write_all(const uint8_t *p, size_t n) {
+  size_t done = 0;
+  for (int tries = 0; done < n && tries < 4; tries++) {
+    size_t w = i2s.write(p + done, n - done);
+    if (w == 0) break;                 // driver is refusing; do not spin on it
+    done += w;
+  }
+}
+
 static void voice_task(void *) {
   File f;
   uint32_t seen_seq = 0;
@@ -105,12 +119,12 @@ static void voice_task(void *) {
         // A short final read is the end of the clip; ramp it rather than
         // trusting the file to end on a zero crossing.
         if (got < sizeof(buf)) fade_out(buf, n);
-        i2s.write((uint8_t *)buf, n * sizeof(int16_t));
+        write_all((uint8_t *)buf, n * sizeof(int16_t));
       }
     } else {
       // Blocks on DMA, which is exactly the pacing we want -- this is the
       // task's idle delay, not what keeps the amp from popping.
-      i2s.write((uint8_t *)silence, sizeof(silence));
+      write_all((uint8_t *)silence, sizeof(silence));
     }
   }
 }

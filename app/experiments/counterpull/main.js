@@ -350,17 +350,6 @@ async function main() {
     key: 'hap-floor-v2', value: 0.2, min: 0, max: 0.5, step: 0.01,
     note: 'Keeps the motor turning between knocks, so each one starts from a '
         + 'spinning rotor rather than a standstill.' });
-  const pHapMoveFull = panel.slider('Turn that fully wakes the motor (deg/s)', {
-    key: 'hap-move-full', value: 45, min: 10, max: 200, step: 5,
-    note: 'Deliberately not the ramp the picture uses. Searching for the spot '
-        + 'is done with slow, hunting turns, and on the visual ramp -- which '
-        + 'wants 90 deg/s -- those barely open the gate at all. That, rather '
-        + 'than the strength, is what made it feel like nothing was there.' });
-  const pMoveGate = panel.slider('How much stillness quiets it', {
-    key: 'hap-move-gate-v2', value: 0.85, min: 0, max: 1, step: 0.01,
-    note: '1 = the motor says nothing unless the orb is being turned. Standing '
-        + 'on the spot overrides this whatever it is set to — which is what '
-        + 'makes arriving there unmistakable.' });
   const pYesStrength = panel.slider('Reward strength', {
     key: 'hap-yes', value: 1, min: 0, max: 1, step: 0.01,
     note: 'Winning at the spot is the hand\'s errand, so it gets a swell that '
@@ -1185,9 +1174,15 @@ async function main() {
         // Warmer is faster and harder, full stop. Nothing on screen says where
         // the spot is, so the gradient itself has to carry the whole message.
         const amp = pAmpFar.value + (pAmpNear.value - pAmpFar.value) * spotNear;
-        const hapMove = smooth01(ramp(liveTurn, pVisMin.value, pHapMoveFull.value));
-        const gate = Math.max(1 - pMoveGate.value * (1 - hapMove), foundAmt);
-        motorLevel = clamp01(amp * gate * (pHapFloor.value + (1 - pHapFloor.value) * wave));
+        // Held is the whole gate now. It used to also have to be *turning*,
+        // on the reasoning that a gradient is only legible while you sweep
+        // across it -- but that made the motor go dead in the pauses, which is
+        // exactly when someone stops to work out what they just felt. Warmth
+        // is a fact about where the orb is pointing, not about whether the
+        // hand is busy, so it is reported the whole time it is being held.
+        // `heldAmt` rather than `held`, so it fades with the pickup instead of
+        // arriving as a click.
+        motorLevel = clamp01(amp * heldAmt * (pHapFloor.value + (1 - pHapFloor.value) * wave));
       }
       orb.setHaptic(motorLevel);
       hadHaptics = true;
